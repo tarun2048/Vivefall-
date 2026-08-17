@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vivefall - A 3D Voxel Adventure</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <!-- Import map for Three.js -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.147.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.147.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- 3D Game Canvas Container -->
+  <div id="game-container"></div>
+
+  <!-- Game HUD (always visible when playing) -->
+  <div id="hud" class="hidden">
+    <div id="crosshair">+</div>
+    
+    <!-- Top Stats (Day/Time, Biome) -->
+    <div id="top-stats">
+      <div id="time-display">Day 1 - 08:00 (Morning)</div>
+      <div id="biome-display">Biome: Plains</div>
+    </div>
+
+    <!-- Boss Health Bar -->
+    <div id="boss-bar-container" class="hidden">
+      <div id="boss-bar-text">👹 DARK LORD - HP: 100 / 100</div>
+      <div id="boss-bar-bg"><div id="boss-bar-fill"></div></div>
+    </div>
+
+    <!-- SmartWatch Story Quest Tracker -->
+    <div id="smartwatch-hud" class="hidden">
+      <div class="watch-header">⌚ SMARTWATCH QUEST TRACKER</div>
+      <div class="quest-title">Zuzu's Return Quest</div>
+      <ul id="quest-list">
+        <li id="quest-sleep" class="quest-item">💤 Sleep in a Bed</li>
+        <li id="quest-eat" class="quest-item">🍖 Eat Food</li>
+        <li id="quest-trade" class="quest-item">🤝 Trade with Villager</li>
+        <li id="quest-farm" class="quest-item">🌾 Farm / Plant Crops</li>
+        <li id="quest-defeat_mobs" class="quest-item">⚔️ Defeat a Mob</li>
+      </ul>
+      <div id="quest-status-footer">[0/5 Achievements Unlocked]</div>
+    </div>
+
+    <!-- Health, Hunger and Hotbar -->
+    <div id="hud-bottom">
+      <div id="status-bars">
+        <div id="health-bar" class="status-row"></div>
+        <div id="hunger-bar" class="status-row"></div>
+      </div>
+      
+      <!-- Hotbar Container -->
+      <div id="hotbar" class="minecraft-grid">
+        <!-- 9 hotbar slots, generated dynamically or written statically -->
+        <div class="slot hotbar-slot active" data-slot="0"></div>
+        <div class="slot hotbar-slot" data-slot="1"></div>
+        <div class="slot hotbar-slot" data-slot="2"></div>
+        <div class="slot hotbar-slot" data-slot="3"></div>
+        <div class="slot hotbar-slot" data-slot="4"></div>
+        <div class="slot hotbar-slot" data-slot="5"></div>
+        <div class="slot hotbar-slot" data-slot="6"></div>
+        <div class="slot hotbar-slot" data-slot="7"></div>
+        <div class="slot hotbar-slot" data-slot="8"></div>
+      </div>
+    </div>
+
+    <!-- Block breaking progress bar (circular or horizontal) -->
+    <div id="break-progress-container" class="hidden">
+      <div id="break-progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- Screen Overlays -->
+  
+  <!-- Cursor Item Tracker (for item dragging) -->
+  <div id="dragged-item" class="item-icon hidden"></div>
+
+  <!-- Tooltip for hovering items -->
+  <div id="tooltip" class="hidden">Item Name</div>
+
+  <!-- Story Slideshow Modal Overlay -->
+  <div id="story-modal" class="overlay hidden">
+    <div class="story-box">
+      <h2 id="story-title">BOOK OF DESTINY</h2>
+      <div class="story-media">
+        <img id="story-img" src="" alt="Story Scene">
+      </div>
+      <p id="story-text">Story text...</p>
+      <div class="story-actions">
+        <button id="btn-story-prev" class="menu-btn">&lt; PREVIOUS</button>
+        <button id="btn-story-next" class="menu-btn primary-btn">NEXT &gt;</button>
+        <button id="btn-story-start" class="menu-btn primary-btn hidden">START STORY QUEST!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div id="start-screen" class="overlay">
+    <div class="menu-box">
+      <div class="logo-container">
+        <img id="game-logo" src="images/vivefall_logo.png" alt="Vivefall Logo">
+      </div>
+      <p class="subtitle">Zuzu's Voxel Story Adventure</p>
+      
+      <div class="form-group">
+        <label for="world-seed">World Seed (Optional):</label>
+        <input type="text" id="world-seed" placeholder="Random Seed..." maxlength="16">
+      </div>
+
+      <div class="mode-select">
+        <button id="btn-story" class="menu-btn active">📖 Story Mode</button>
+        <button id="btn-creative" class="menu-btn">🎨 Creative Mode</button>
+      </div>
+
+      <button id="btn-play" class="menu-btn primary-btn">PLAY STORY MODE</button>
+      <button id="btn-load" class="menu-btn disabled" disabled>LOAD SAVED WORLD</button>
+      <button id="btn-export-db" class="menu-btn">EXPORT WORLD (.db)</button>
+      <button id="btn-import-db" class="menu-btn">IMPORT WORLD (.db)</button>
+      <input type="file" id="file-import-world" accept=".db,.json" class="hidden">
+
+      <div class="controls-guide">
+        <h3>Controls:</h3>
+        <p><strong>WASD</strong>: Move | <strong>Mouse</strong>: Look | <strong>Left Click</strong>: Break Block</p>
+        <p><strong>Right Click</strong>: Place Block / Interact (Chest, Villager, Crafting)</p>
+        <p><strong>Space</strong>: Jump / Fly Up (Double tap in Creative) | <strong>Shift</strong>: Sneak / Fly Down</p>
+        <p><strong>E</strong>: Open Inventory / Close UI | <strong>1-9</strong>: Select Hotbar Slot</p>
+        <p><strong>Esc</strong>: Pause Menu</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Menu -->
+  <div id="pause-screen" class="overlay hidden">
+    <div class="menu-box">
+      <h2>Game Paused</h2>
+      <button id="btn-resume" class="menu-btn primary-btn">Resume Game</button>
+      <button id="btn-save" class="menu-btn primary-btn">Save Game</button>
+      <button id="btn-export-db-pause" class="menu-btn">Export World (.db)</button>
+      <button id="btn-toggle-time" class="menu-btn">🌙 Toggle Day / Night</button>
+      <button id="btn-toggle-fly" class="menu-btn hidden">Toggle Fly</button>
+      <button id="btn-respawn" class="menu-btn">Respawn</button>
+      <button id="btn-quit" class="menu-btn danger-btn">Quit to Title</button>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="game-over-screen" class="overlay hidden">
+    <div class="menu-box text-center">
+      <h1 class="death-title">You Died!</h1>
+      <p id="death-reason" class="subtitle">Fell out of the world</p>
+      <button id="btn-respawn-death" class="menu-btn primary-btn">Respawn</button>
+      <button id="btn-quit-death" class="menu-btn">Quit to Menu</button>
+    </div>
+  </div>
+
+  <!-- Master UI Screen (Inventory, Crafting, Chest, Villager Trade) -->
+  <div id="ui-screen" class="overlay hidden">
+    <!-- Close Button -->
+    <div id="ui-close-indicator">Press [E] to return to game</div>
+    
+    <div class="ui-container">
+      
+      <!-- Screen 1: Inventory (Survival/Creative Inventory + 2x2 Crafting) -->
+      <div id="screen-inventory" class="ui-panel hidden">
+        <h2 id="inventory-mode-title">Inventory</h2>
+        <div class="inventory-layout">
+          <!-- Top area: Player Render + Armor + 2x2 Crafting (only in Survival/normal mode) -->
+          <div class="inventory-top-row">
+            <div class="armor-slots-container">
+              <div class="slot armor-slot" data-slot="armor-head" title="Helmet"></div>
+              <div class="slot armor-slot" data-slot="armor-chest" title="Chestplate"></div>
+              <div class="slot armor-slot" data-slot="armor-legs" title="Leggings"></div>
+              <div class="slot armor-slot" data-slot="armor-feet" title="Boots"></div>
+            </div>
+            
+            <div class="player-preview-box">
+              <div id="player-preview-canvas-placeholder">3D Player Preview</div>
+            </div>
+
+            <div class="crafting-2x2-box">
+              <span class="panel-label">Crafting</span>
+              <div class="crafting-2x2-layout">
+                <div class="grid-2x2 minecraft-grid">
+                  <div class="slot craft-in-2" data-slot="craft2-in-0"></div>
+                  <div class="slot craft-in-2" data-slot="craft2-in-1"></div>
+                  <div class="slot craft-in-2" data-slot="craft2-in-2"></div>
+                  <div class="slot craft-in-2" data-slot="craft2-in-3"></div>
+                </div>
+                <div class="crafting-arrow">&rarr;</div>
+                <div class="slot craft-out-2" data-slot="craft2-out"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Mid divider line -->
+          <hr class="pixel-hr">
+          
+          <!-- Bottom area: Inventory Storage Grid (3x9) + Hotbar (1x9) -->
+          <div class="inventory-bottom-row">
+            <span class="panel-label">Storage</span>
+            <div id="inventory-storage-grid" class="minecraft-grid storage-grid">
+              <!-- 27 slots generated dynamically in script -->
+            </div>
+            
+            <span class="panel-label">Hotbar</span>
+            <div id="inventory-hotbar-grid" class="minecraft-grid hotbar-grid">
+              <!-- 9 slots generated dynamically in script -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 1b: Creative Search / Item Palette -->
+      <div id="screen-creative-palette" class="ui-panel hidden">
+        <h2>Creative Inventory</h2>
+        <div class="creative-layout">
+          <div class="tab-header">
+            <button class="tab-btn active" data-tab="blocks">Blocks</button>
+            <button class="tab-btn" data-tab="tools">Tools</button>
+            <button class="tab-btn" data-tab="food">Items & Food</button>
+          </div>
+          <div id="creative-item-grid" class="minecraft-grid scrollable-grid">
+            <!-- Populated dynamically with all blocks/items -->
+          </div>
+          <hr class="pixel-hr">
+          <span class="panel-label">Hotbar</span>
+          <div id="creative-hotbar-grid" class="minecraft-grid hotbar-grid">
+            <!-- 9 slots -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 2: Workstation - 3x3 Crafting Table -->
+      <div id="screen-crafting-3x3" class="ui-panel hidden">
+        <h2>Crafting Table</h2>
+        <div class="crafting-3x3-layout">
+          <div class="crafting-workspace">
+            <div class="grid-3x3 minecraft-grid">
+              <div class="slot craft-in-3" data-slot="craft3-in-0"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-1"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-2"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-3"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-4"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-5"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-6"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-7"></div>
+              <div class="slot craft-in-3" data-slot="craft3-in-8"></div>
+            </div>
+            <div class="crafting-arrow">&rarr;</div>
+            <div class="slot craft-out-3" data-slot="craft3-out"></div>
+          </div>
+          <hr class="pixel-hr">
+          <div class="player-inventory-section">
+            <span class="panel-label">Inventory</span>
+            <div id="craft3-inventory-grid" class="minecraft-grid storage-grid"></div>
+            <span class="panel-label">Hotbar</span>
+            <div id="craft3-hotbar-grid" class="minecraft-grid hotbar-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 3: Workstation - Chest Storage -->
+      <div id="screen-chest" class="ui-panel hidden">
+        <h2 id="chest-title">Chest</h2>
+        <div class="chest-layout">
+          <div class="chest-inventory-section">
+            <span class="panel-label">Chest Storage</span>
+            <div id="chest-grid" class="minecraft-grid chest-grid">
+              <!-- 27 chest slots -->
+            </div>
+          </div>
+          <hr class="pixel-hr">
+          <div class="player-inventory-section">
+            <span class="panel-label">Inventory</span>
+            <div id="chest-player-inventory-grid" class="minecraft-grid storage-grid"></div>
+            <span class="panel-label">Hotbar</span>
+            <div id="chest-player-hotbar-grid" class="minecraft-grid hotbar-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Screen 4: Workstation - Villager Trading -->
+      <div id="screen-trading" class="ui-panel hidden">
+        <h2>Villager Trading</h2>
+        <div class="trading-layout">
+          <div class="trading-workspace">
+            <!-- Left side: List of trades -->
+            <div id="trade-list" class="trade-list-container">
+              <!-- Dynamically populated trade offers -->
+            </div>
+            
+            <!-- Right side: The active trade interaction -->
+            <div class="trade-slots-container">
+              <div class="slots-row">
+                <div class="slot trade-in" data-slot="trade-in-1"></div>
+                <div class="slot trade-in" data-slot="trade-in-2"></div>
+                <div class="trade-arrow">&rarr;</div>
+                <div class="slot trade-out" data-slot="trade-out"></div>
+              </div>
+              <button id="btn-trade-execute" class="menu-btn disabled">TRADE</button>
+            </div>
+          </div>
+          <hr class="pixel-hr">
+          <div class="player-inventory-section">
+            <span class="panel-label">Inventory</span>
+            <div id="trade-player-inventory-grid" class="minecraft-grid storage-grid"></div>
+            <span class="panel-label">Hotbar</span>
+            <div id="trade-player-hotbar-grid" class="minecraft-grid hotbar-grid"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Background Music/Sound effect tags can go here (using audio synthesis or silence as fallback) -->
+  <script type="module" src="js/simplex-noise.js"></script>
+  <script type="module" src="js/engine.js"></script>
+</body>
+</html>
