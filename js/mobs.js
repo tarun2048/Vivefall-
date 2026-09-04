@@ -99,15 +99,15 @@ export class MobsManager {
     return villager;
   }
 
-  spawnSheep(x, y, z) {
-    const sheep = new Sheep(this.engine, x, y, z);
+  spawnSheep(x, y, z, biome = 'plains') {
+    const sheep = new Sheep(this.engine, x, y, z, biome);
     this.mobs.push(sheep);
     this.mobsGroup.add(sheep.mesh);
     return sheep;
   }
 
-  spawnZombie(x, y, z) {
-    const zombie = new Zombie(this.engine, x, y, z);
+  spawnZombie(x, y, z, biome = 'plains') {
+    const zombie = new Zombie(this.engine, x, y, z, biome);
     this.mobs.push(zombie);
     this.mobsGroup.add(zombie.mesh);
     return zombie;
@@ -127,15 +127,15 @@ export class MobsManager {
     return chicken;
   }
 
-  spawnSkeleton(x, y, z) {
-    const skeleton = new Skeleton(this.engine, x, y, z);
+  spawnSkeleton(x, y, z, biome = 'plains') {
+    const skeleton = new Skeleton(this.engine, x, y, z, biome);
     this.mobs.push(skeleton);
     this.mobsGroup.add(skeleton.mesh);
     return skeleton;
   }
 
-  spawnSpider(x, y, z) {
-    const spider = new Spider(this.engine, x, y, z);
+  spawnSpider(x, y, z, biome = 'plains') {
+    const spider = new Spider(this.engine, x, y, z, biome);
     this.mobs.push(spider);
     this.mobsGroup.add(spider.mesh);
     return spider;
@@ -146,6 +146,27 @@ export class MobsManager {
     this.mobs.push(boss);
     this.mobsGroup.add(boss.mesh);
     return boss;
+  }
+
+  spawnPolarBear(x, y, z) {
+    const bear = new PolarBear(this.engine, x, y, z);
+    this.mobs.push(bear);
+    this.mobsGroup.add(bear.mesh);
+    return bear;
+  }
+
+  spawnGoat(x, y, z) {
+    const goat = new Goat(this.engine, x, y, z);
+    this.mobs.push(goat);
+    this.mobsGroup.add(goat.mesh);
+    return goat;
+  }
+
+  spawnPanther(x, y, z) {
+    const panther = new Panther(this.engine, x, y, z);
+    this.mobs.push(panther);
+    this.mobsGroup.add(panther.mesh);
+    return panther;
   }
 
   checkMobClick(camera, maxDistance = 5) {
@@ -267,23 +288,43 @@ export class MobsManager {
       let ry = world.getTerrainHeight(rx, rz);
       if (ry < world.seaLevel) ry = world.seaLevel + 1;
 
+      const cellBiome = world.getBiome(rx, rz);
       const rand = Math.random();
-      
-      if (isNight) {
-        if (rand < 0.45) {
-          this.spawnZombie(rx, ry + 1, rz);
-        } else if (rand < 0.8) {
-          this.spawnSkeleton(rx, ry + 1, rz);
+          if (isNight) {
+        if (cellBiome === 'snow') {
+          if (rand < 0.40) this.spawnPolarBear(rx, ry + 1, rz);
+          else if (rand < 0.75) this.spawnSkeleton(rx, ry + 1, rz, cellBiome);
+          else this.spawnSpider(rx, ry + 1, rz, cellBiome);
+        } else if (cellBiome === 'jungle') {
+          if (rand < 0.45) this.spawnPanther(rx, ry + 1, rz);
+          else if (rand < 0.75) this.spawnSpider(rx, ry + 1, rz, cellBiome);
+          else this.spawnZombie(rx, ry + 1, rz, cellBiome);
+        } else if (cellBiome === 'mountains') {
+          if (rand < 0.40) this.spawnGoat(rx, ry + 1, rz);
+          else if (rand < 0.75) this.spawnSkeleton(rx, ry + 1, rz, cellBiome);
+          else this.spawnZombie(rx, ry + 1, rz, cellBiome);
         } else {
-          this.spawnSpider(rx, ry + 1, rz);
+          if (rand < 0.45) this.spawnZombie(rx, ry + 1, rz, cellBiome);
+          else if (rand < 0.8) this.spawnSkeleton(rx, ry + 1, rz, cellBiome);
+          else this.spawnSpider(rx, ry + 1, rz, cellBiome);
         }
       } else {
-        if (rand < 0.35) {
-          this.spawnSheep(rx, ry + 1, rz);
-        } else if (rand < 0.7) {
-          this.spawnCow(rx, ry + 1, rz);
+        if (cellBiome === 'snow') {
+          if (rand < 0.55) this.spawnPolarBear(rx, ry + 1, rz);
+          else if (rand < 0.80) this.spawnSheep(rx, ry + 1, rz, cellBiome);
+          else this.spawnCow(rx, ry + 1, rz);
+        } else if (cellBiome === 'mountains') {
+          if (rand < 0.65) this.spawnGoat(rx, ry + 1, rz);
+          else if (rand < 0.85) this.spawnSheep(rx, ry + 1, rz, cellBiome);
+          else this.spawnCow(rx, ry + 1, rz);
+        } else if (cellBiome === 'jungle') {
+          if (rand < 0.50) this.spawnPanther(rx, ry + 1, rz);
+          else if (rand < 0.80) this.spawnChicken(rx, ry + 1, rz);
+          else this.spawnCow(rx, ry + 1, rz);
         } else {
-          this.spawnChicken(rx, ry + 1, rz);
+          if (rand < 0.35) this.spawnSheep(rx, ry + 1, rz, cellBiome);
+          else if (rand < 0.7) this.spawnCow(rx, ry + 1, rz);
+          else this.spawnChicken(rx, ry + 1, rz);
         }
       }
     }
@@ -306,6 +347,16 @@ export class MobsManager {
 
     this.mobs = this.mobs.filter(mob => {
       if (!mob.mesh.parent) return false;
+
+      // Despawn non-essential mobs that are too far (> 65 blocks) to keep biome spawning active!
+      if (this.engine.player && !(mob instanceof Villager) && !(mob instanceof DarkBoss)) {
+        const dist = mob.position.distanceTo(this.engine.player.position);
+        if (dist > 65) {
+          mob.mesh.parent?.remove(mob.mesh);
+          return false;
+        }
+      }
+
       mob.update(delta);
       return true;
     });
@@ -704,9 +755,10 @@ class Villager {
 }
 
 class Sheep {
-  constructor(engine, x, y, z) {
+  constructor(engine, x, y, z, biome = 'plains') {
     this.engine = engine;
     this.position = new THREE.Vector3(x, y, z);
+    this.biome = biome;
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.width = 0.6;
     this.height = 0.9;
@@ -732,7 +784,13 @@ class Sheep {
     this.mesh = new THREE.Group();
     this.mesh.position.copy(this.position);
 
-    const woolMat = new THREE.MeshLambertMaterial({ color: 0xfafafa });
+    let woolColor = 0xfafafa;
+    if (this.biome === 'cherry_blossom') woolColor = 0xffb7d5;
+    else if (this.biome === 'jungle') woolColor = 0xffd700;
+    else if (this.biome === 'snow') woolColor = 0xe6f2ff;
+    else if (this.biome === 'mountains') woolColor = 0xd0d0d0;
+
+    const woolMat = new THREE.MeshLambertMaterial({ color: woolColor });
     const skinMat = new THREE.MeshLambertMaterial({ color: 0xdfbca7 });
     const eyeMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
 
@@ -904,9 +962,10 @@ class Sheep {
 }
 
 class Zombie {
-  constructor(engine, x, y, z) {
+  constructor(engine, x, y, z, biome = 'plains') {
     this.engine = engine;
     this.position = new THREE.Vector3(x, y, z);
+    this.biome = biome;
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.width = 0.6;
     this.height = 1.8;
@@ -926,9 +985,27 @@ class Zombie {
     this.mesh = new THREE.Group();
     this.mesh.position.copy(this.position);
 
-    const skinMat = new THREE.MeshLambertMaterial({ color: 0x44aa44 });
-    const shirtMat = new THREE.MeshLambertMaterial({ color: 0x2244aa });
-    const pantsMat = new THREE.MeshLambertMaterial({ color: 0x552255 });
+    let skinColor = 0x44aa44;
+    let shirtColor = 0x2244aa;
+    let pantsColor = 0x552255;
+
+    if (this.biome === 'snow') {
+      skinColor = 0x99ccff; // Frost Yeti Zombie
+      shirtColor = 0xe6f2ff;
+      pantsColor = 0x3b5998;
+    } else if (this.biome === 'desert') {
+      skinColor = 0xd2b48c; // Sand Husk Zombie
+      shirtColor = 0xc2a649;
+      pantsColor = 0x6e5223;
+    } else if (this.biome === 'jungle') {
+      skinColor = 0x1b5e20; // Deep Jungle Serpent Zombie
+      shirtColor = 0x33691e;
+      pantsColor = 0x2e7d32;
+    }
+
+    const skinMat = new THREE.MeshLambertMaterial({ color: skinColor });
+    const shirtMat = new THREE.MeshLambertMaterial({ color: shirtColor });
+    const pantsMat = new THREE.MeshLambertMaterial({ color: pantsColor });
 
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.8, 0.4), shirtMat);
     torso.position.set(0, 0.8, 0);
@@ -1521,9 +1598,10 @@ class Chicken {
 }
 
 class Skeleton {
-  constructor(engine, x, y, z) {
+  constructor(engine, x, y, z, biome = 'plains') {
     this.engine = engine;
     this.position = new THREE.Vector3(x, y, z);
+    this.biome = biome;
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.width = 0.6;
     this.height = 1.8;
@@ -1547,7 +1625,14 @@ class Skeleton {
     this.mesh = new THREE.Group();
     this.mesh.position.copy(this.position);
 
-    const boneMat = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+    let boneColor = 0xdddddd;
+    if (this.biome === 'snow' || this.biome === 'mountains') {
+      boneColor = 0x80d8ff; // Frost Ice Skeleton
+    } else if (this.biome === 'jungle') {
+      boneColor = 0xa5d6a7; // Mossy Skeleton
+    }
+
+    const boneMat = new THREE.MeshLambertMaterial({ color: boneColor });
 
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.8, 0.12), boneMat);
     torso.position.set(0, 0.8, 0);
@@ -1748,9 +1833,10 @@ class Skeleton {
 }
 
 class Spider {
-  constructor(engine, x, y, z) {
+  constructor(engine, x, y, z, biome = 'plains') {
     this.engine = engine;
     this.position = new THREE.Vector3(x, y, z);
+    this.biome = biome;
     this.velocity = new THREE.Vector3(0, 0, 0);
     this.width = 0.8;
     this.height = 0.4;
@@ -1771,7 +1857,21 @@ class Spider {
     this.mesh = new THREE.Group();
     this.mesh.position.copy(this.position);
 
-    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1f1f1f });
+    let bodyColor = 0x1f1f1f;
+    let eyeColor = 0xcc0000;
+
+    if (this.biome === 'jungle') {
+      bodyColor = 0x00c853; // Emerald Poison Jungle Spider
+      eyeColor = 0xff1744;
+    } else if (this.biome === 'desert') {
+      bodyColor = 0xd7ccc8; // Sand Spider
+      eyeColor = 0xff9100;
+    } else if (this.biome === 'snow') {
+      bodyColor = 0x81d4fa; // Frost Spider
+      eyeColor = 0x00e5ff;
+    }
+
+    const bodyMat = new THREE.MeshLambertMaterial({ color: bodyColor });
     const eyeMat = new THREE.MeshLambertMaterial({ color: 0xee2222 });
 
     const abdomen = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.75), bodyMat);
@@ -2167,5 +2267,385 @@ export class DarkBoss {
 
     this.onGround = this.engine.physics.applyMovement(this.position, this.velocity, this.width, this.height, delta, false);
     this.mesh.position.copy(this.position);
+  }
+}
+
+class PolarBear {
+  constructor(engine, x, y, z) {
+    this.engine = engine;
+    this.position = new THREE.Vector3(x, y, z);
+    this.velocity = new THREE.Vector3(0, 0, 0);
+    this.width = 0.9;
+    this.height = 1.2;
+    this.onGround = false;
+    this.speed = 1.2;
+    this.health = 25;
+    this.isDead = false;
+    this.wanderTimer = 0;
+    this.isMoving = false;
+    this.moveDir = new THREE.Vector3();
+    this.isRunningAway = false;
+    this.runAwayTimer = 0;
+    this.drops = [{ id: 'raw_mutton', min: 1, max: 3 }];
+    this.buildModel();
+  }
+
+  buildModel() {
+    this.mesh = new THREE.Group();
+    this.mesh.position.copy(this.position);
+
+    const furMat = new THREE.MeshLambertMaterial({ color: 0xf5f7fa });
+    const noseMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.75, 1.3), furMat);
+    body.position.set(0, 0.65, 0);
+    this.mesh.add(body);
+
+    this.head = new THREE.Group();
+    this.head.position.set(0, 0.85, 0.75);
+    const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.48, 0.5), furMat);
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.28), furMat);
+    snout.position.set(0, -0.05, 0.32);
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.08), noseMat);
+    nose.position.set(0, 0.02, 0.47);
+    this.head.add(headMesh, snout, nose);
+    this.mesh.add(this.head);
+
+    this.legs = [];
+    const legGeo = new THREE.BoxGeometry(0.26, 0.45, 0.26);
+    const pos = [[-0.32, 0.22, 0.45], [0.32, 0.22, 0.45], [-0.32, 0.22, -0.45], [0.32, 0.22, -0.45]];
+    pos.forEach(p => {
+      const leg = new THREE.Mesh(legGeo, furMat);
+      leg.position.set(...p);
+      this.mesh.add(leg);
+      this.legs.push(leg);
+    });
+  }
+
+  takeDamage(amount) {
+    if (this.isDead) return;
+    this.health -= amount;
+    this.isRunningAway = true;
+    this.runAwayTimer = 4.0;
+    this.flashRed();
+    if (this.health <= 0) this.die();
+  }
+
+  flashRed() {
+    this.mesh.traverse(child => {
+      if (child.isMesh) {
+        const orig = child.material.color.getHex();
+        child.material.color.setHex(0xff3333);
+        setTimeout(() => child.material?.color.setHex(orig), 200);
+      }
+    });
+  }
+
+  die() {
+    this.isDead = true;
+    this.engine.unlockAchievement('defeat_mobs');
+    this.drops.forEach(d => {
+      const count = Math.floor(d.min + Math.random() * (d.max - d.min + 1));
+      for (let i = 0; i < count; i++) {
+        this.engine.spawnItemDrop(this.position.x, this.position.y + 0.5, this.position.z, d.id);
+      }
+    });
+    this.mesh.parent?.remove(this.mesh);
+  }
+
+  update(delta) {
+    if (this.isDead) return;
+    if (this.isRunningAway) {
+      this.runAwayTimer -= delta;
+      if (this.runAwayTimer <= 0) this.isRunningAway = false;
+    }
+    this.wanderTimer -= delta;
+    if (this.wanderTimer <= 0) {
+      if (this.isRunningAway || Math.random() < 0.5) {
+        this.isMoving = true;
+        const angle = this.isRunningAway ? Math.atan2(this.position.x - this.engine.player.position.x, this.position.z - this.engine.player.position.z) + (Math.random() - 0.5) : Math.random() * Math.PI * 2;
+        this.moveDir.set(Math.sin(angle), 0, Math.cos(angle)).normalize();
+        this.wanderTimer = this.isRunningAway ? 0.8 : 2.5 + Math.random() * 3.0;
+        this.mesh.rotation.y = Math.atan2(this.moveDir.x, this.moveDir.z);
+      } else {
+        this.isMoving = false;
+        this.wanderTimer = 2.0 + Math.random() * 3.0;
+      }
+    }
+
+    const currentSpeed = this.isRunningAway ? this.speed * 2.2 : this.speed;
+    if (this.isMoving) {
+      this.velocity.x = this.moveDir.x * currentSpeed;
+      this.velocity.z = this.moveDir.z * currentSpeed;
+      const swing = Math.sin(performance.now() * 0.008) * 0.4;
+      this.legs[0].rotation.x = swing;
+      this.legs[1].rotation.x = -swing;
+      this.legs[2].rotation.x = -swing;
+      this.legs[3].rotation.x = swing;
+    } else {
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+      this.legs.forEach(l => l.rotation.x = 0);
+    }
+    this.velocity.y -= 20.0 * delta;
+    this.onGround = this.engine.physics.applyMovement(this.position, this.velocity, this.width, this.height, delta, false);
+    this.mesh.position.copy(this.position);
+    if (this.position.y < -30) this.mesh.parent?.remove(this.mesh);
+  }
+}
+
+class Goat {
+  constructor(engine, x, y, z) {
+    this.engine = engine;
+    this.position = new THREE.Vector3(x, y, z);
+    this.velocity = new THREE.Vector3(0, 0, 0);
+    this.width = 0.6;
+    this.height = 0.9;
+    this.onGround = false;
+    this.speed = 1.6;
+    this.health = 12;
+    this.isDead = false;
+    this.wanderTimer = 0;
+    this.isMoving = false;
+    this.moveDir = new THREE.Vector3();
+    this.isRunningAway = false;
+    this.runAwayTimer = 0;
+    this.drops = [{ id: 'raw_mutton', min: 1, max: 2 }, { id: 'wool', min: 1, max: 1 }];
+    this.buildModel();
+  }
+
+  buildModel() {
+    this.mesh = new THREE.Group();
+    this.mesh.position.copy(this.position);
+
+    const coatMat = new THREE.MeshLambertMaterial({ color: 0xededed });
+    const hornMat = new THREE.MeshLambertMaterial({ color: 0x4a3b32 });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.75), coatMat);
+    body.position.set(0, 0.45, 0);
+    this.mesh.add(body);
+
+    this.head = new THREE.Group();
+    this.head.position.set(0, 0.65, 0.4);
+    const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.32), coatMat);
+    const hornL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), hornMat);
+    hornL.position.set(-0.1, 0.22, -0.05);
+    hornL.rotation.x = -0.3;
+    const hornR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), hornMat);
+    hornR.position.set(0.1, 0.22, -0.05);
+    hornR.rotation.x = -0.3;
+    this.head.add(headMesh, hornL, hornR);
+    this.mesh.add(this.head);
+
+    this.legs = [];
+    const legGeo = new THREE.BoxGeometry(0.14, 0.35, 0.14);
+    const pos = [[-0.18, 0.17, 0.25], [0.18, 0.17, 0.25], [-0.18, 0.17, -0.25], [0.18, 0.17, -0.25]];
+    pos.forEach(p => {
+      const leg = new THREE.Mesh(legGeo, coatMat);
+      leg.position.set(...p);
+      this.mesh.add(leg);
+      this.legs.push(leg);
+    });
+  }
+
+  takeDamage(amount) {
+    if (this.isDead) return;
+    this.health -= amount;
+    this.isRunningAway = true;
+    this.runAwayTimer = 4.0;
+    this.flashRed();
+    if (this.health <= 0) this.die();
+  }
+
+  flashRed() {
+    this.mesh.traverse(child => {
+      if (child.isMesh) {
+        const orig = child.material.color.getHex();
+        child.material.color.setHex(0xff3333);
+        setTimeout(() => child.material?.color.setHex(orig), 200);
+      }
+    });
+  }
+
+  die() {
+    this.isDead = true;
+    this.engine.unlockAchievement('defeat_mobs');
+    this.drops.forEach(d => {
+      const count = Math.floor(d.min + Math.random() * (d.max - d.min + 1));
+      for (let i = 0; i < count; i++) {
+        this.engine.spawnItemDrop(this.position.x, this.position.y + 0.5, this.position.z, d.id);
+      }
+    });
+    this.mesh.parent?.remove(this.mesh);
+  }
+
+  update(delta) {
+    if (this.isDead) return;
+    if (this.isRunningAway) {
+      this.runAwayTimer -= delta;
+      if (this.runAwayTimer <= 0) this.isRunningAway = false;
+    }
+    this.wanderTimer -= delta;
+    if (this.wanderTimer <= 0) {
+      if (this.isRunningAway || Math.random() < 0.5) {
+        this.isMoving = true;
+        const angle = this.isRunningAway ? Math.atan2(this.position.x - this.engine.player.position.x, this.position.z - this.engine.player.position.z) + (Math.random() - 0.5) : Math.random() * Math.PI * 2;
+        this.moveDir.set(Math.sin(angle), 0, Math.cos(angle)).normalize();
+        this.wanderTimer = this.isRunningAway ? 0.8 : 2.0 + Math.random() * 3.0;
+        this.mesh.rotation.y = Math.atan2(this.moveDir.x, this.moveDir.z);
+        if (this.onGround && Math.random() < 0.4) this.velocity.y = 8.0;
+      } else {
+        this.isMoving = false;
+        this.wanderTimer = 1.5 + Math.random() * 2.5;
+      }
+    }
+
+    const currentSpeed = this.isRunningAway ? this.speed * 2.5 : this.speed;
+    if (this.isMoving) {
+      this.velocity.x = this.moveDir.x * currentSpeed;
+      this.velocity.z = this.moveDir.z * currentSpeed;
+      const swing = Math.sin(performance.now() * 0.012) * 0.5;
+      this.legs[0].rotation.x = swing;
+      this.legs[1].rotation.x = -swing;
+      this.legs[2].rotation.x = -swing;
+      this.legs[3].rotation.x = swing;
+    } else {
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+      this.legs.forEach(l => l.rotation.x = 0);
+    }
+    this.velocity.y -= 20.0 * delta;
+    this.onGround = this.engine.physics.applyMovement(this.position, this.velocity, this.width, this.height, delta, false);
+    this.mesh.position.copy(this.position);
+    if (this.position.y < -30) this.mesh.parent?.remove(this.mesh);
+  }
+}
+
+class Panther {
+  constructor(engine, x, y, z) {
+    this.engine = engine;
+    this.position = new THREE.Vector3(x, y, z);
+    this.velocity = new THREE.Vector3(0, 0, 0);
+    this.width = 0.5;
+    this.height = 0.6;
+    this.onGround = false;
+    this.speed = 2.2;
+    this.health = 14;
+    this.isDead = false;
+    this.wanderTimer = 0;
+    this.isMoving = false;
+    this.moveDir = new THREE.Vector3();
+    this.isRunningAway = false;
+    this.runAwayTimer = 0;
+    this.drops = [{ id: 'raw_mutton', min: 1, max: 2 }];
+    this.buildModel();
+  }
+
+  buildModel() {
+    this.mesh = new THREE.Group();
+    this.mesh.position.copy(this.position);
+
+    const furMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+    const eyeMat = new THREE.MeshLambertMaterial({ color: 0xffeb3b });
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.38, 0.85), furMat);
+    body.position.set(0, 0.35, 0);
+    this.mesh.add(body);
+
+    this.head = new THREE.Group();
+    this.head.position.set(0, 0.48, 0.45);
+    const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.25, 0.28), furMat);
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.02), eyeMat);
+    eyeL.position.set(-0.08, 0.04, 0.15);
+    const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.02), eyeMat);
+    eyeR.position.set(0.08, 0.04, 0.15);
+    this.head.add(headMesh, eyeL, eyeR);
+    this.mesh.add(this.head);
+
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.45), furMat);
+    tail.position.set(0, 0.42, -0.6);
+    tail.rotation.x = -0.4;
+    this.mesh.add(tail);
+
+    this.legs = [];
+    const legGeo = new THREE.BoxGeometry(0.12, 0.28, 0.12);
+    const pos = [[-0.16, 0.14, 0.3], [0.16, 0.14, 0.3], [-0.16, 0.14, -0.3], [0.16, 0.14, -0.3]];
+    pos.forEach(p => {
+      const leg = new THREE.Mesh(legGeo, furMat);
+      leg.position.set(...p);
+      this.mesh.add(leg);
+      this.legs.push(leg);
+    });
+  }
+
+  takeDamage(amount) {
+    if (this.isDead) return;
+    this.health -= amount;
+    this.isRunningAway = true;
+    this.runAwayTimer = 4.0;
+    this.flashRed();
+    if (this.health <= 0) this.die();
+  }
+
+  flashRed() {
+    this.mesh.traverse(child => {
+      if (child.isMesh) {
+        const orig = child.material.color.getHex();
+        child.material.color.setHex(0xff3333);
+        setTimeout(() => child.material?.color.setHex(orig), 200);
+      }
+    });
+  }
+
+  die() {
+    this.isDead = true;
+    this.engine.unlockAchievement('defeat_mobs');
+    this.drops.forEach(d => {
+      const count = Math.floor(d.min + Math.random() * (d.max - d.min + 1));
+      for (let i = 0; i < count; i++) {
+        this.engine.spawnItemDrop(this.position.x, this.position.y + 0.5, this.position.z, d.id);
+      }
+    });
+    this.mesh.parent?.remove(this.mesh);
+  }
+
+  update(delta) {
+    if (this.isDead) return;
+    if (this.isRunningAway) {
+      this.runAwayTimer -= delta;
+      if (this.runAwayTimer <= 0) this.isRunningAway = false;
+    }
+    this.wanderTimer -= delta;
+    if (this.wanderTimer <= 0) {
+      if (this.isRunningAway || Math.random() < 0.6) {
+        this.isMoving = true;
+        const angle = this.isRunningAway ? Math.atan2(this.position.x - this.engine.player.position.x, this.position.z - this.engine.player.position.z) + (Math.random() - 0.5) : Math.random() * Math.PI * 2;
+        this.moveDir.set(Math.sin(angle), 0, Math.cos(angle)).normalize();
+        this.wanderTimer = this.isRunningAway ? 0.6 : 1.5 + Math.random() * 2.5;
+        this.mesh.rotation.y = Math.atan2(this.moveDir.x, this.moveDir.z);
+      } else {
+        this.isMoving = false;
+        this.wanderTimer = 1.0 + Math.random() * 2.0;
+      }
+    }
+
+    const currentSpeed = this.isRunningAway ? this.speed * 2.4 : this.speed;
+    if (this.isMoving) {
+      this.velocity.x = this.moveDir.x * currentSpeed;
+      this.velocity.z = this.moveDir.z * currentSpeed;
+      const swing = Math.sin(performance.now() * 0.016) * 0.6;
+      this.legs[0].rotation.x = swing;
+      this.legs[1].rotation.x = -swing;
+      this.legs[2].rotation.x = -swing;
+      this.legs[3].rotation.x = swing;
+    } else {
+      this.velocity.x = 0;
+      this.velocity.z = 0;
+      this.legs.forEach(l => l.rotation.x = 0);
+    }
+    this.velocity.y -= 20.0 * delta;
+    this.onGround = this.engine.physics.applyMovement(this.position, this.velocity, this.width, this.height, delta, false);
+    this.mesh.position.copy(this.position);
+    if (this.position.y < -30) this.mesh.parent?.remove(this.mesh);
   }
 }
