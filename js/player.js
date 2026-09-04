@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { BLOCK, BLOCK_DEFS } from './world.js';
+import { BLOCK, BLOCK_DEFS } from './world.js?v=2';
+import { ZuzuCharacterModel } from './zuzu_model.js?v=2';
 
 // SVG Assets for authentic pixel HUD look
 // SVG Assets for authentic pixel HUD look
@@ -74,6 +75,12 @@ export class Player {
     this.mineTimer = 0;
     this.mineDurability = 0; // Total duration to break block
 
+    // Camera Mode (0: First Person, 1: Third Person Behind, 2: Third Person Front)
+    this.cameraMode = 0;
+    this.zuzuWorldModel = new ZuzuCharacterModel({ scale: 1.0 });
+    this.zuzuWorldModel.mesh.visible = false;
+    this.engine.scene.add(this.zuzuWorldModel.mesh);
+
     this.initInputs();
     this.updateHUD();
   }
@@ -84,12 +91,31 @@ export class Player {
     this.engine.controls.getObject().position.copy(this.position);
     this.engine.controls.getObject().position.y += 1.6; // camera at eye level
     this.isFlying = false;
+    if (this.zuzuWorldModel) {
+      this.zuzuWorldModel.mesh.position.copy(this.position);
+    }
     this.updateHUD();
   }
 
+  cleanup() {
+    if (this.boundKeyDown) window.removeEventListener('keydown', this.boundKeyDown);
+    if (this.boundKeyUp) window.removeEventListener('keyup', this.boundKeyUp);
+    if (this.boundDblClick) window.removeEventListener('dblclick', this.boundDblClick);
+    if (this.boundMouseDown) window.removeEventListener('mousedown', this.boundMouseDown);
+    if (this.boundMouseUp) window.removeEventListener('mouseup', this.boundMouseUp);
+
+    this.boundKeyDown = null;
+    this.boundKeyUp = null;
+    this.boundDblClick = null;
+    this.boundMouseDown = null;
+    this.boundMouseUp = null;
+  }
+
   initInputs() {
-    // Keyboard inputs
-    window.addEventListener('keydown', (e) => {
+    // Always clean up existing window event listeners before binding new ones!
+    this.cleanup();
+
+    this.boundKeyDown = (e) => {
       const key = e.key.toLowerCase();
 
       // If inventory or workstation UI is open, allow E and Escape to close it
@@ -100,6 +126,18 @@ export class Player {
         }
         return;
       }
+
+      // SmartWatch Toggle via M key
+      if (key === 'm') {
+        if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.engine.smartwatch) this.engine.smartwatch.toggle();
+        return;
+      }
+
+      // If smartwatch is open, ignore player movement and game keys
+      if (this.engine.gameState === 'smartwatch') return;
 
       if (this.engine.gameState !== 'playing') return;
 
@@ -133,9 +171,18 @@ export class Player {
         e.preventDefault();
         this.engine.openInventory('screen-inventory');
       }
-    });
 
-    window.addEventListener('keyup', (e) => {
+      // F5 Third Person Camera Toggle (1st person -> 3rd person back -> 3rd person front)
+      if (e.key === 'F5' || key === 'f5') {
+        e.preventDefault();
+        this.cameraMode = (this.cameraMode + 1) % 3;
+        if (this.zuzuWorldModel) {
+          this.zuzuWorldModel.mesh.visible = (this.cameraMode !== 0);
+        }
+      }
+    };
+
+    this.boundKeyUp = (e) => {
       const key = e.key.toLowerCase();
       if (key === 'w') this.keys.w = false;
       if (key === 'a') this.keys.a = false;
@@ -143,16 +190,15 @@ export class Player {
       if (key === 'd') this.keys.d = false;
       if (key === 'shift') this.keys.shift = false;
       if (key === ' ') this.keys.space = false;
-    });
+    };
 
-    // Double click to sprint
-    window.addEventListener('dblclick', (e) => {
+    this.boundDblClick = (e) => {
       if (this.engine.gameState === 'playing') {
         this.isSprinting = true;
       }
-    });
+    };
 
-    window.addEventListener('mousedown', (e) => {
+    this.boundMouseDown = (e) => {
       if (this.engine.gameState !== 'playing') return;
 
       if (e.button === 0) {
@@ -167,13 +213,19 @@ export class Player {
         // Right Click: Place block / Eat / Interact
         this.handleRightClick();
       }
-    });
+    };
 
-    window.addEventListener('mouseup', (e) => {
+    this.boundMouseUp = (e) => {
       if (e.button === 0) {
         this.stopMining();
       }
-    });
+    };
+
+    window.addEventListener('keydown', this.boundKeyDown);
+    window.addEventListener('keyup', this.boundKeyUp);
+    window.addEventListener('dblclick', this.boundDblClick);
+    window.addEventListener('mousedown', this.boundMouseDown);
+    window.addEventListener('mouseup', this.boundMouseUp);
   }
 
   selectHotbarSlot(index) {
@@ -293,6 +345,7 @@ export class Player {
       let droppedItemId = null;
       // Map block ID to drops
       if (bid === BLOCK.GRASS) droppedItemId = 'dirt';
+      else if (bid === BLOCK.SNOW_GRASS) droppedItemId = 'snow_grass';
       else if (bid === BLOCK.STONE) droppedItemId = 'cobblestone';
       else if (bid === BLOCK.BED_HEAD || bid === BLOCK.BED_FOOT) {
         droppedItemId = 'bed';
@@ -393,6 +446,14 @@ export class Player {
     }
     if (targetBlockId === BLOCK.BUTTON) {
       this.engine.pressButton(ray.target.x, ray.target.y, ray.target.z);
+      return;
+    }
+    if (targetBlockId === BLOCK.LANTERN || targetBlockId === BLOCK.LANTERN_ON) {
+      this.engine.toggleLantern(ray.target.x, ray.target.y, ray.target.z);
+      return;
+    }
+    if (targetBlockId === BLOCK.GLOW_BLOCK || targetBlockId === BLOCK.GLOW_BLOCK_ON) {
+      this.engine.toggleGlowBlock(ray.target.x, ray.target.y, ray.target.z);
       return;
     }
 
@@ -547,9 +608,19 @@ export class Player {
     if (itemId === 'pink_flower') return BLOCK.FLOWER_PINK;
     if (itemId === 'torch') return BLOCK.TORCH;
     if (itemId === 'tnt') return BLOCK.TNT;
-    if (itemId === 'redstone_wire') return BLOCK.REDSTONE_WIRE;
+    if (itemId === 'copper_wire' || itemId === 'redstone_wire' || itemId === 'redstone_dust') return BLOCK.COPPER_WIRE;
     if (itemId === 'lever') return BLOCK.LEVER;
     if (itemId === 'button') return BLOCK.BUTTON;
+    if (itemId === 'snow_grass') return BLOCK.SNOW_GRASS;
+    if (itemId === 'snow_block' || itemId === 'snow') return BLOCK.SNOW;
+    if (itemId === 'ice') return BLOCK.ICE;
+    if (itemId === 'pine_log') return BLOCK.PINE_WOOD;
+    if (itemId === 'pine_leaves') return BLOCK.PINE_LEAVES;
+    if (itemId === 'jungle_log') return BLOCK.JUNGLE_WOOD;
+    if (itemId === 'jungle_leaves') return BLOCK.JUNGLE_LEAVES;
+    if (itemId === 'mossy_cobblestone') return BLOCK.MOSSY_COBBLE;
+    if (itemId === 'lantern' || itemId === 'lantern_on') return BLOCK.LANTERN_ON;
+    if (itemId === 'glow_block' || itemId === 'glow_block_on' || itemId === 'sea_lantern') return BLOCK.GLOW_BLOCK_ON;
     return BLOCK.AIR;
   }
 
@@ -626,8 +697,47 @@ export class Player {
     cameraObj.position.copy(this.position);
     cameraObj.position.y += 1.6;
 
-    // Footstep audio triggers
     const velocityMag = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+
+    // Update In-Game 3D Zuzu Character Model
+    if (this.zuzuWorldModel) {
+      this.zuzuWorldModel.mesh.position.copy(this.position);
+
+      const lookDir = new THREE.Vector3();
+      this.engine.camera.getWorldDirection(lookDir);
+      this.zuzuWorldModel.mesh.rotation.y = Math.atan2(lookDir.x, lookDir.z);
+
+      const isMoving = velocityMag > 0.1;
+      const isJumping = !this.onGround && !this.isFlying;
+      this.zuzuWorldModel.update(delta, performance.now() / 1000, velocityMag, isMoving, isJumping, this.isMining);
+
+      // Live sync held item & armor with in-game model
+      const activeItem = this.engine.inventory?.hotbar[this.selectedHotbarIndex];
+      this.zuzuWorldModel.setHeldItem(activeItem ? activeItem.id : null);
+
+      if (this.engine.inventory?.armor) {
+        ['head', 'chest', 'legs', 'feet'].forEach(part => {
+          this.zuzuWorldModel.setArmor(part, this.engine.inventory.armor[part]?.id || null);
+        });
+      }
+
+      // Handle third person camera offsets
+      if (this.cameraMode === 1) {
+        // Third Person Behind
+        this.zuzuWorldModel.mesh.visible = true;
+        cameraObj.position.sub(lookDir.clone().multiplyScalar(3.2));
+        cameraObj.position.y += 0.3;
+      } else if (this.cameraMode === 2) {
+        // Third Person Front (front view looking at Zuzu)
+        this.zuzuWorldModel.mesh.visible = true;
+        cameraObj.position.add(lookDir.clone().multiplyScalar(2.6));
+        cameraObj.position.y += 0.2;
+        this.engine.camera.lookAt(this.position.x, this.position.y + 1.2, this.position.z);
+      } else {
+        // First Person View
+        this.zuzuWorldModel.mesh.visible = false;
+      }
+    }
     if (velocityMag > 0.05 && this.onGround && !this.isFlying) {
       if (!this.stepTimer) this.stepTimer = 0;
       this.stepTimer -= delta;
