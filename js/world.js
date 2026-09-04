@@ -25,9 +25,22 @@ export const BLOCK = {
   FLOWER_PINK: 20,
   TORCH: 21,
   TNT: 22,
-  REDSTONE_WIRE: 23,
+  COPPER_WIRE: 23,
+  REDSTONE_WIRE: 23, // Alias
   LEVER: 24,
-  BUTTON: 25
+  BUTTON: 25,
+  SNOW_GRASS: 26,
+  SNOW: 27,
+  ICE: 28,
+  PINE_WOOD: 29,
+  PINE_LEAVES: 30,
+  JUNGLE_WOOD: 31,
+  JUNGLE_LEAVES: 32,
+  MOSSY_COBBLE: 33,
+  LANTERN: 34,
+  LANTERN_ON: 35,
+  GLOW_BLOCK: 36,
+  GLOW_BLOCK_ON: 37
 };
 
 // Define block characteristics
@@ -55,9 +68,21 @@ export const BLOCK_DEFS = {
   [BLOCK.FLOWER_PINK]: { name: 'Pink Flower', solid: false, transparent: true, top: 25, side: 25, bottom: 25 },
   [BLOCK.TORCH]: { name: 'Torch', solid: false, transparent: true, top: 26, side: 26, bottom: 26 },
   [BLOCK.TNT]: { name: 'TNT', solid: true, transparent: false, top: 27, side: 28, bottom: 27 },
-  [BLOCK.REDSTONE_WIRE]: { name: 'Redstone Dust', solid: false, transparent: true, top: 29, side: 29, bottom: 29 },
+  [BLOCK.COPPER_WIRE]: { name: 'Copper Wire', solid: false, transparent: true, top: 29, side: 29, bottom: 29 },
   [BLOCK.LEVER]: { name: 'Lever', solid: false, transparent: true, top: 30, side: 30, bottom: 30 },
-  [BLOCK.BUTTON]: { name: 'Button', solid: false, transparent: true, top: 31, side: 31, bottom: 31 }
+  [BLOCK.BUTTON]: { name: 'Button', solid: false, transparent: true, top: 31, side: 31, bottom: 31 },
+  [BLOCK.SNOW_GRASS]: { name: 'Snow Grass', solid: true, transparent: false, top: 32, side: 33, bottom: 2 },
+  [BLOCK.SNOW]: { name: 'Snow Block', solid: true, transparent: false, top: 34, side: 34, bottom: 34 },
+  [BLOCK.ICE]: { name: 'Ice', solid: true, transparent: true, top: 35, side: 35, bottom: 35 },
+  [BLOCK.PINE_WOOD]: { name: 'Pine Log', solid: true, transparent: false, top: 37, side: 36, bottom: 37 },
+  [BLOCK.PINE_LEAVES]: { name: 'Pine Leaves', solid: true, transparent: true, top: 38, side: 38, bottom: 38 },
+  [BLOCK.JUNGLE_WOOD]: { name: 'Jungle Log', solid: true, transparent: false, top: 40, side: 39, bottom: 40 },
+  [BLOCK.JUNGLE_LEAVES]: { name: 'Jungle Leaves', solid: true, transparent: true, top: 41, side: 41, bottom: 41 },
+  [BLOCK.MOSSY_COBBLE]: { name: 'Mossy Cobblestone', solid: true, transparent: false, top: 42, side: 42, bottom: 42 },
+  [BLOCK.LANTERN]: { name: 'Lantern (Off)', solid: false, transparent: true, isCustomMesh: true, light: 0 },
+  [BLOCK.LANTERN_ON]: { name: 'Lantern', solid: false, transparent: true, isCustomMesh: true, light: 15 },
+  [BLOCK.GLOW_BLOCK]: { name: 'Glowing Block (Off)', solid: true, transparent: false, top: 43, side: 43, bottom: 43, light: 0 },
+  [BLOCK.GLOW_BLOCK_ON]: { name: 'Glowing Block', solid: true, transparent: false, top: 44, side: 44, bottom: 44, light: 15 }
 };
 
 export class World {
@@ -74,6 +99,7 @@ export class World {
     this.chunks = new Map(); // Key: 'cx,cz' -> Chunk data
     this.decoratedChunks = new Set(); // Key: 'cx,cz' -> Chunks that generated decorations
     this.chunkMeshes = new Map(); // Key: 'cx,cz' -> THREE.Mesh
+    this.dirtyChunks = new Set(); // Key: 'cx,cz' -> Chunks requiring mesh rebuild
     this.modifications = {}; // Key: 'x,y,z' -> blockId
 
     this.textureAtlas = null;
@@ -444,30 +470,206 @@ export class World {
     ctx.fillText('TNT', 256 + 32, 192 + 38);
     paintAO(256, 192, 64, 64);
 
-    // 29: Redstone Dust Wire
+    // 29: Copper Wire (Realistic Electrical Conductor & Insulation)
     ctx.clearRect(320, 192, 64, 64);
-    ctx.fillStyle = '#ff2222';
+    // Dark rubberized base insulation
+    ctx.fillStyle = '#1c1917';
+    ctx.fillRect(320 + 20, 192, 24, 64);
+    ctx.fillRect(320, 192 + 20, 64, 24);
+    // Conductive copper core with metallic sheen
+    ctx.fillStyle = '#b45309';
     ctx.fillRect(320 + 24, 192, 16, 64);
     ctx.fillRect(320, 192 + 24, 64, 16);
-    ctx.fillStyle = '#ff7777';
-    ctx.fillRect(320 + 28, 192 + 28, 8, 8);
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(320 + 26, 192, 12, 64);
+    ctx.fillRect(320, 192 + 26, 64, 12);
+    // Bright copper highlight reflection
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(320 + 28, 192, 4, 64);
+    ctx.fillRect(320, 192 + 28, 64, 4);
+    // Central junction terminal knot
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(320 + 22, 192 + 22, 20, 20);
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(320 + 26, 192 + 26, 12, 12);
 
-    // 30: Lever
+    // 30: Lever (Beveled Cobblestone Base & Polished Handle)
     ctx.clearRect(384, 192, 64, 64);
-    ctx.fillStyle = '#757575';
-    ctx.fillRect(384 + 16, 192 + 44, 32, 16);
+    // Base mount
+    paintNoise(384 + 12, 192 + 36, 40, 24, '#475569', ['#334155', '#64748b']);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(384 + 12, 192 + 36, 40, 24);
+    // Steel hinge bracket
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(384 + 26, 192 + 32, 12, 12);
+    // Handle shaft
     ctx.fillStyle = '#8b5a2b';
-    ctx.fillRect(384 + 28, 192 + 12, 8, 32);
-    ctx.fillStyle = '#333333';
-    ctx.fillRect(384 + 26, 192 + 6, 12, 10);
+    ctx.fillRect(384 + 28, 192 + 10, 8, 24);
+    ctx.fillStyle = '#b45309';
+    ctx.fillRect(384 + 30, 192 + 10, 4, 24);
+    // Handle knob
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(384 + 24, 192 + 2, 16, 10);
+    ctx.fillStyle = '#ffedd5';
+    ctx.fillRect(384 + 28, 192 + 4, 8, 4);
 
-    // 31: Button
+    // 31: Push Button (Tactile Wall / Floor Mount Button)
     ctx.clearRect(448, 192, 64, 64);
-    ctx.fillStyle = '#999999';
+    // Mounting base plate
+    paintNoise(448 + 10, 192 + 14, 44, 36, '#334155', ['#1e293b', '#475569']);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(448 + 10, 192 + 14, 44, 36);
+    // Raised push cap
+    ctx.fillStyle = '#64748b';
     ctx.fillRect(448 + 16, 192 + 20, 32, 24);
-    ctx.strokeStyle = '#555555';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(448 + 18, 192 + 22, 28, 4);
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(448 + 18, 192 + 38, 28, 4);
+
+    // Row 4
+    // 32: Snow Grass Top
+    paintNoise(0, 256, 64, 64, '#f0f8ff', ['#e6f2ff', '#ffffff', '#d9ecff', '#f5fafd']);
+    paintAO(0, 256, 64, 64);
+
+    // 33: Snow Grass Side
+    paintNoise(64, 256, 64, 64, '#866043', ['#573d26', '#a0734f', '#6d4c33']);
+    ctx.fillStyle = '#f0f8ff'; // Snow top layer
+    ctx.fillRect(64, 256, 64, 18);
+    for (let dx = 64; dx < 128; dx += 8) {
+      const h = 18 + Math.floor(Math.random() * 3) * 4;
+      ctx.fillRect(dx, 256, 8, h);
+    }
+    paintAO(64, 256, 64, 64);
+
+    // 34: Pure Snow Block
+    paintNoise(128, 256, 64, 64, '#f0f8ff', ['#e0f0fe', '#ffffff', '#cce6ff']);
+    paintAO(128, 256, 64, 64);
+
+    // 35: Ice Block
+    paintNoise(192, 256, 64, 64, '#7bbbf3', ['#60a9e8', '#99cef8', '#549fdf']);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.fillRect(192 + 10, 256 + 10, 20, 4);
+    ctx.fillRect(192 + 40, 256 + 32, 14, 4);
+    paintAO(192, 256, 64, 64);
+
+    // 36: Pine Wood Side
+    paintNoise(256, 256, 64, 64, '#3b2f27', ['#261e18', '#4f4035', '#2f251e']);
+    ctx.fillStyle = '#1a130f';
+    ctx.fillRect(256 + 10, 256, 4, 64);
+    ctx.fillRect(256 + 28, 256, 6, 64);
+    ctx.fillRect(256 + 48, 256, 4, 64);
+    paintAO(256, 256, 64, 64);
+
+    // 37: Pine Wood Top
+    paintNoise(320, 256, 64, 64, '#8a6e53', ['#705841', '#9e8063']);
+    ctx.strokeStyle = '#3b2f27';
     ctx.lineWidth = 4;
-    ctx.strokeRect(448 + 16, 192 + 20, 32, 24);
+    ctx.strokeRect(324, 260, 56, 56);
+    ctx.strokeRect(336, 272, 32, 32);
+    paintAO(320, 256, 64, 64);
+
+    // 38: Pine Leaves
+    paintNoise(384, 256, 64, 64, '#1b3b22', ['#112916', '#285231', '#0d2112']);
+    ctx.fillStyle = '#ffffff'; // snow spots on pine needles
+    ctx.fillRect(384 + 12, 256 + 8, 8, 4);
+    ctx.fillRect(384 + 36, 256 + 24, 10, 4);
+    ctx.fillRect(384 + 20, 256 + 44, 12, 4);
+    paintAO(384, 256, 64, 64);
+
+    // 39: Jungle Wood Side
+    paintNoise(448, 256, 64, 64, '#6b472b', ['#4a2e19', '#8a5c37', '#57371f']);
+    ctx.fillStyle = '#301c0e';
+    ctx.fillRect(448 + 12, 256, 4, 64);
+    ctx.fillRect(448 + 36, 256, 4, 64);
+    paintAO(448, 256, 64, 64);
+
+    // Row 5
+    // 40: Jungle Wood Top
+    paintNoise(0, 320, 64, 64, '#a3754e', ['#8c603b', '#ba875c']);
+    ctx.strokeStyle = '#4a2e19';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(4, 324, 56, 56);
+    ctx.strokeRect(16, 336, 32, 32);
+    paintAO(0, 320, 64, 64);
+
+    // 41: Jungle Leaves
+    paintNoise(64, 320, 64, 64, '#2e8b57', ['#1f663e', '#3cb371', '#174d2e', '#48d1cc']);
+    // Tropical flower highlights
+    ctx.fillStyle = '#ff69b4';
+    ctx.fillRect(64 + 16, 320 + 20, 4, 4);
+    ctx.fillRect(64 + 44, 320 + 40, 4, 4);
+    paintAO(64, 320, 64, 64);
+
+    // 42: Mossy Cobblestone
+    paintNoise(128, 320, 64, 64, '#757575', ['#454545', '#919191', '#545454']);
+    ctx.fillStyle = '#2d862d'; // Green moss layer
+    ctx.fillRect(128 + 4, 320 + 4, 16, 12);
+    ctx.fillRect(128 + 32, 320 + 18, 20, 14);
+    ctx.fillRect(128 + 10, 320 + 40, 24, 16);
+    paintAO(128, 320, 64, 64);
+
+    // 43: Glowing Block (OFF)
+    paintNoise(192, 320, 64, 64, '#0f766e', ['#115e59', '#134e4a', '#0d9488']);
+    ctx.strokeStyle = '#042f2e';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(192, 320, 64, 64);
+    paintAO(192, 320, 64, 64);
+
+    // 44: Glowing Block (ON) (Screenshot 2: Aquamarine frame + radiant cyan/white luminescence)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(256, 320, 64, 64);
+    paintNoise(256 + 6, 320 + 6, 52, 52, '#f0fdfa', ['#ffffff', '#ccfbf1', '#e6fffa', '#99f6e4']);
+    // Aquamarine outer framing
+    ctx.strokeStyle = '#0d9488';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(256 + 3, 320 + 3, 58, 58);
+    ctx.strokeStyle = '#2dd4bf';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(256 + 6, 320 + 6, 52, 52);
+    // Inner corner highlights
+    ctx.fillStyle = '#5eead4';
+    ctx.fillRect(256 + 6, 320 + 6, 6, 6);
+    ctx.fillRect(256 + 52, 320 + 6, 6, 6);
+    ctx.fillRect(256 + 6, 320 + 52, 6, 6);
+    ctx.fillRect(256 + 52, 320 + 52, 6, 6);
+
+    // 45: Lantern Metal Frame & Cap (Screenshot 1: Slate Charcoal Metal)
+    paintNoise(320, 320, 64, 64, '#334155', ['#1e293b', '#475569', '#0f172a', '#64748b']);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(320 + 2, 320 + 2, 60, 60);
+    // Rivets
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(320 + 6, 320 + 6, 4, 4);
+    ctx.fillRect(320 + 54, 320 + 6, 4, 4);
+    ctx.fillRect(320 + 6, 320 + 54, 4, 4);
+    ctx.fillRect(320 + 54, 320 + 54, 4, 4);
+    paintAO(320, 320, 64, 64);
+
+    // 46: Lantern Glass Core (OFF)
+    paintNoise(384, 320, 64, 64, '#292524', ['#1c1917', '#44403c', '#0c0a09']);
+    ctx.fillStyle = '#78716c';
+    ctx.fillRect(384 + 28, 320 + 20, 8, 24);
+
+    // 47: Lantern Glass Core (ON) (Screenshot 1: Radiant Whitish-Amber Flame)
+    ctx.fillStyle = '#ea580c';
+    ctx.fillRect(448, 320, 64, 64);
+    // Outer flame glow
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(448 + 8, 320 + 8, 48, 48);
+    // Mid warm amber glow
+    ctx.fillStyle = '#fde047';
+    ctx.fillRect(448 + 14, 320 + 14, 36, 36);
+    // Stepped pixel fire pattern from Screenshot 1
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(448 + 20, 320 + 26, 12, 16);
+    ctx.fillRect(448 + 32, 320 + 18, 12, 20);
+    // White-hot core
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(448 + 24, 320 + 22, 16, 16);
 
     this.textureAtlas = new THREE.CanvasTexture(canvas);
     this.textureAtlas.magFilter = THREE.NearestFilter;
@@ -554,6 +756,11 @@ export class World {
     // Track block modification
     this.modifications[`${x},${y},${z}`] = blockId;
 
+    // Multiplayer delta sync hook
+    if (this.engine && this.engine.multiplayer && !this._isApplyingRemoteDelta) {
+      this.engine.multiplayer.onLocalBlockChange(x, y, z, blockId, oldBlock);
+    }
+
     if (updateMesh) {
       this.generateChunkMesh(cx, cz);
       
@@ -604,11 +811,20 @@ export class World {
     const biome = this.getBiome(x, z);
     let height = 24; // baseline height
 
-    if (biome === 'desert') {
+    if (biome === 'mountains') {
+      const hn = noise.fbm2D(x * 0.008, z * 0.008, 4) * 26;
+      height = 32 + hn; // Dramatic high peaks up to 58 blocks!
+    } else if (biome === 'snow') {
+      const hn = noise.fbm2D(x * 0.006, z * 0.006, 3) * 8;
+      height += hn + 2; // Cold rolling tundra
+    } else if (biome === 'jungle') {
+      const hn = noise.fbm2D(x * 0.009, z * 0.009, 3) * 12;
+      height += hn + 3; // Dense tropical hills
+    } else if (biome === 'desert') {
       const hn = noise.fbm2D(x * 0.008, z * 0.008, 2) * 8;
       height += hn; // desert is flat with minor dunes
     } else if (biome === 'forest') {
-      const hn = noise.fbm2D(x * 0.012, z * 0.012, 4) * 18;
+      const hn = noise.fbm2D(x * 0.012, z * 0.012, 4) * 16;
       height += hn + 4; // forest is hilly
     } else if (biome === 'cherry_blossom') {
       const hn = noise.fbm2D(x * 0.01, z * 0.01, 3) * 12;
@@ -624,24 +840,35 @@ export class World {
     return Math.floor(height);
   }
 
-  // Resolve Biome type
+  // Resolve Biome type with balanced exploration scale (~200 to 350 blocks wide per biome)
   getBiome(x, z) {
     const noise = this.engine.noise;
-    // Biome weight determines dryness vs green forest
-    const moisture = noise.noise2D(x * 0.003, z * 0.003); // range [-1, 1]
-    const temperature = noise.noise2D((x + 1000) * 0.003, (z + 1000) * 0.003); // range [-1, 1]
-    
-    if (temperature > 0.4 && moisture < -0.2) {
-      return 'desert';
-    } else if (temperature > 0.2 && moisture > 0.4) {
-      return 'cherry_blossom';
-    } else if (temperature < -0.1 && moisture > 0.1) {
-      return 'forest';
-    } else if (temperature > 0.0 && moisture > 0.0 && moisture <= 0.4) {
-      return 'floral';
-    } else {
-      return 'plains';
+    // Scale 0.0018 creates balanced biome regions (~15-20 chunks wide) so players encounter diverse biomes while traveling!
+    const moisture = noise.noise2D(x * 0.0018, z * 0.0018);
+    const temperature = noise.noise2D((x + 3000) * 0.0018, (z + 3000) * 0.0018);
+    const elevation = noise.fbm2D(x * 0.0025, z * 0.0025, 3);
+
+    // 1. Cold Biomes (Snow / Mountain peaks)
+    if (temperature < -0.22) {
+      if (elevation > 0.35) return 'mountains';
+      return 'snow';
     }
+
+    // 2. Hot Biomes (Desert / Jungle)
+    if (temperature > 0.25) {
+      if (moisture < -0.15) return 'desert';
+      if (moisture > 0.15) return 'jungle';
+      if (elevation > 0.38) return 'mountains';
+      return 'forest';
+    }
+
+    // 3. Temperate Biomes (Cherry Blossom, Floral, Forest, Plains)
+    if (elevation > 0.42) return 'mountains';
+    if (moisture > 0.30) return 'cherry_blossom';
+    if (moisture > 0.05 && moisture <= 0.30) return 'floral';
+    if (moisture < -0.2) return 'desert';
+    if (moisture < 0.05 && temperature < -0.05) return 'forest';
+    return 'plains';
   }
 
   // Ensure a chunk is allocated and has basic terrain blocks (but no decorations yet)
@@ -674,6 +901,14 @@ export class World {
               // Surface block
               if (biome === 'desert') {
                 chunk[index] = BLOCK.SAND;
+              } else if (biome === 'snow') {
+                chunk[index] = BLOCK.SNOW_GRASS;
+              } else if (biome === 'mountains') {
+                if (y >= 44) chunk[index] = BLOCK.SNOW;
+                else if (y >= 32) chunk[index] = BLOCK.STONE;
+                else chunk[index] = BLOCK.GRASS;
+              } else if (biome === 'jungle') {
+                chunk[index] = (Math.random() < 0.15) ? BLOCK.MOSSY_COBBLE : BLOCK.GRASS;
               } else {
                 chunk[index] = BLOCK.GRASS;
               }
@@ -681,6 +916,11 @@ export class World {
               // Subsurface block
               if (biome === 'desert') {
                 chunk[index] = BLOCK.SAND;
+              } else if (biome === 'snow') {
+                chunk[index] = BLOCK.DIRT;
+              } else if (biome === 'mountains') {
+                if (y >= 42) chunk[index] = BLOCK.SNOW;
+                else chunk[index] = BLOCK.STONE;
               } else {
                 chunk[index] = BLOCK.DIRT;
               }
@@ -688,11 +928,12 @@ export class World {
               chunk[index] = BLOCK.STONE; // deep stone
             }
           } else {
-            // Above ground, check for water
+            // Above ground, check for water / ice
             if (y <= this.seaLevel) {
-              // Water block
               if (biome === 'desert') {
-                chunk[index] = BLOCK.AIR; // Deserts don't fill with low sea level ponds
+                chunk[index] = BLOCK.AIR;
+              } else if (biome === 'snow') {
+                chunk[index] = (y === this.seaLevel) ? BLOCK.ICE : BLOCK.WATER;
               } else {
                 chunk[index] = BLOCK.WATER;
               }
@@ -928,6 +1169,142 @@ export class World {
             continue;
           }
 
+          // --- Helper: Add 3D Textured Box to mesh data ---
+          const addBox = (list, x0, y0, z0, x1, y1, z1, tileIndex) => {
+            const tCol = tileIndex % 8;
+            const tRow = Math.floor(tileIndex / 8);
+            const u0 = tCol / 8 + 0.003;
+            const u1 = (tCol + 1) / 8 - 0.003;
+            const v0 = (7 - tRow) / 8 + 0.003;
+            const v1 = (8 - tRow) / 8 - 0.003;
+
+            const boxFaces = [
+              // Up
+              { verts: [ [x0, y1, z1], [x1, y1, z1], [x0, y1, z0], [x1, y1, z0] ], norm: [0, 1, 0] },
+              // Down
+              { verts: [ [x0, y0, z0], [x1, y0, z0], [x0, y0, z1], [x1, y0, z1] ], norm: [0, -1, 0] },
+              // Left (West)
+              { verts: [ [x0, y0, z0], [x0, y0, z1], [x0, y1, z0], [x0, y1, z1] ], norm: [-1, 0, 0] },
+              // Right (East)
+              { verts: [ [x1, y0, z1], [x1, y0, z0], [x1, y1, z1], [x1, y1, z0] ], norm: [1, 0, 0] },
+              // Back (North)
+              { verts: [ [x1, y0, z0], [x0, y0, z0], [x1, y1, z0], [x0, y1, z0] ], norm: [0, 0, -1] },
+              // Front (South)
+              { verts: [ [x0, y0, z1], [x1, y0, z1], [x0, y1, z1], [x1, y1, z1] ], norm: [0, 0, 1] }
+            ];
+
+            for (let bf = 0; bf < boxFaces.length; bf++) {
+              const face = boxFaces[bf];
+              const v = face.verts;
+              list.positions.push(...v[0], ...v[1], ...v[2]);
+              list.positions.push(...v[2], ...v[1], ...v[3]);
+              for (let k = 0; k < 6; k++) list.normals.push(...face.norm);
+              list.uvs.push(u0, v0, u1, v0, u0, v1, u0, v1, u1, v0, u1, v1);
+            }
+          };
+
+          // --- 1. Custom 3D Model: Realistic Copper Wire ---
+          const isCopperWire = blockId === BLOCK.COPPER_WIRE || blockId === BLOCK.REDSTONE_WIRE;
+          if (isCopperWire) {
+            const list = transData;
+            const wireTile = 29; // Copper wire texture
+
+            // Check adjacent neighbor connections
+            const nNorth = this.getBlock(wx, y, wz - 1);
+            const nSouth = this.getBlock(wx, y, wz + 1);
+            const nWest = this.getBlock(wx - 1, y, wz);
+            const nEast = this.getBlock(wx + 1, y, wz);
+
+            const isConnectable = (id) => id === BLOCK.COPPER_WIRE || id === BLOCK.REDSTONE_WIRE || id === BLOCK.LEVER || id === BLOCK.BUTTON || id === BLOCK.TNT || id === BLOCK.LANTERN || id === BLOCK.LANTERN_ON || id === BLOCK.GLOW_BLOCK || id === BLOCK.GLOW_BLOCK_ON;
+
+            const connN = isConnectable(nNorth);
+            const connS = isConnectable(nSouth);
+            const connW = isConnectable(nWest);
+            const connE = isConnectable(nEast);
+
+            // Center junction terminal node
+            addBox(list, wx + 0.36, y, wz + 0.36, wx + 0.64, y + 0.05, wz + 0.64, wireTile);
+
+            // Connecting wire arms
+            if (connN || (!connN && !connS && !connW && !connE)) {
+              addBox(list, wx + 0.40, y, wz, wx + 0.60, y + 0.05, wz + 0.36, wireTile);
+            }
+            if (connS || (!connN && !connS && !connW && !connE)) {
+              addBox(list, wx + 0.40, y, wz + 0.64, wx + 0.60, y + 0.05, wz + 1.0, wireTile);
+            }
+            if (connW) {
+              addBox(list, wx, y, wz + 0.40, wx + 0.36, y + 0.05, wz + 0.60, wireTile);
+            }
+            if (connE) {
+              addBox(list, wx + 0.64, y, wz + 0.40, wx + 1.0, y + 0.05, wz + 0.60, wireTile);
+            }
+            continue;
+          }
+
+          // --- 2. Custom 3D Model: Heavy Stone Mount Lever with Wood/Knob Handle ---
+          const isLever = blockId === BLOCK.LEVER;
+          if (isLever) {
+            const list = transData;
+            
+            // Part A: Heavy Cobblestone Mount Base
+            addBox(list, wx + 0.22, y, wz + 0.18, wx + 0.78, y + 0.14, wz + 0.82, 4);
+
+            // Part B: Steel Hinge Bracket
+            addBox(list, wx + 0.38, y + 0.14, wz + 0.40, wx + 0.62, y + 0.22, wz + 0.60, 3);
+
+            // Part C: Angled Wood Lever Handle Shaft
+            addBox(list, wx + 0.44, y + 0.20, wz + 0.38, wx + 0.56, y + 0.60, wz + 0.66, 5);
+
+            // Part D: Ergonomic Orange Grip Knob Head
+            addBox(list, wx + 0.40, y + 0.58, wz + 0.60, wx + 0.60, y + 0.72, wz + 0.76, 20);
+            continue;
+          }
+
+          // --- 3. Custom 3D Model: Tactile Stone Push Button ---
+          const isButton = blockId === BLOCK.BUTTON;
+          if (isButton) {
+            const list = transData;
+            
+            // Part A: Mounting Base Plate
+            addBox(list, wx + 0.20, y, wz + 0.26, wx + 0.80, y + 0.04, wz + 0.74, 3);
+
+            // Part B: Raised Tactile Push Button Cap
+            addBox(list, wx + 0.28, y + 0.04, wz + 0.34, wx + 0.72, y + 0.18, wz + 0.66, 15);
+            continue;
+          }
+
+          // --- 4. Custom 3D Model: Medieval Slate Metal Lantern with Stepped Cap & Fire Core (Screenshot 1) ---
+          const isLantern = blockId === BLOCK.LANTERN || blockId === BLOCK.LANTERN_ON;
+          if (isLantern) {
+            const list = transData;
+            const isLit = blockId === BLOCK.LANTERN_ON;
+            const coreTile = isLit ? 47 : 46;
+
+            // Base Rim (Dark Slate Frame)
+            addBox(list, wx + 0.22, y, wz + 0.22, wx + 0.78, y + 0.08, wz + 0.78, 45);
+
+            // 4 Corner Metal Pillars
+            addBox(list, wx + 0.22, y + 0.08, wz + 0.22, wx + 0.32, y + 0.60, wz + 0.32, 45);
+            addBox(list, wx + 0.68, y + 0.08, wz + 0.22, wx + 0.78, y + 0.60, wz + 0.32, 45);
+            addBox(list, wx + 0.22, y + 0.08, wz + 0.68, wx + 0.32, y + 0.60, wz + 0.78, 45);
+            addBox(list, wx + 0.68, y + 0.08, wz + 0.68, wx + 0.78, y + 0.60, wz + 0.78, 45);
+
+            // Inner Radiant Luminous Core
+            addBox(list, wx + 0.28, y + 0.08, wz + 0.28, wx + 0.72, y + 0.60, wz + 0.72, coreTile);
+
+            // Stepped Roof Cap (Lower Tier)
+            addBox(list, wx + 0.20, y + 0.60, wz + 0.20, wx + 0.80, y + 0.68, wz + 0.80, 45);
+
+            // Stepped Roof Cap (Upper Tier)
+            addBox(list, wx + 0.26, y + 0.68, wz + 0.26, wx + 0.74, y + 0.80, wz + 0.74, 45);
+
+            // Top Handle Loop Ring
+            addBox(list, wx + 0.38, y + 0.80, wz + 0.44, wx + 0.44, y + 0.94, wz + 0.56, 45);
+            addBox(list, wx + 0.56, y + 0.80, wz + 0.44, wx + 0.62, y + 0.94, wz + 0.56, 45);
+            addBox(list, wx + 0.38, y + 0.90, wz + 0.44, wx + 0.62, y + 0.96, wz + 0.56, 45);
+            continue;
+          }
+
           // Check all 6 faces
           for (let f = 0; f < faces.length; f++) {
             const face = faces[f];
@@ -1052,26 +1429,29 @@ export class World {
     const pcx = Math.floor(px / this.chunkSize);
     const pcz = Math.floor(pz / this.chunkSize);
 
-    // 1. Generate chunk grid data first
-    for (let x = -this.renderDistance; x <= this.renderDistance; x++) {
-      for (let z = -this.renderDistance; z <= this.renderDistance; z++) {
+    // 1. Generate chunk grid data & decorations first (+2 padding so structures up to 2 chunks wide decorate fully before mesh building)
+    const pad = this.renderDistance + 2;
+    for (let x = -pad; x <= pad; x++) {
+      for (let z = -pad; z <= pad; z++) {
         const cx = pcx + x;
         const cz = pcz + z;
         this.generateChunkData(cx, cz);
       }
     }
 
-    // 2. Build meshes after all local block structures are placed
+    // 2. Build or rebuild meshes after all local block structures are placed
     for (let x = -this.renderDistance; x <= this.renderDistance; x++) {
       for (let z = -this.renderDistance; z <= this.renderDistance; z++) {
         const cx = pcx + x;
         const cz = pcz + z;
         const chunkKey = `${cx},${cz}`;
-        if (!this.chunkMeshes.has(chunkKey)) {
+        if (!this.chunkMeshes.has(chunkKey) || this.dirtyChunks.has(chunkKey)) {
           this.generateChunkMesh(cx, cz);
         }
       }
     }
+
+    this.dirtyChunks.clear();
   }
 
   // Dynamic chunk loading & cleanup
