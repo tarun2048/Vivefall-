@@ -1,13 +1,16 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { SimplexNoise } from './simplex-noise.js';
-import { World, BLOCK_DEFS } from './world.js';
-import { Player } from './player.js';
-import { Physics } from './physics.js';
-import { MobsManager } from './mobs.js';
-import { InventoryManager, ITEM_SVGS } from './inventory.js';
-import { Structures } from './structures.js';
-import { SoundManager } from './sound.js';
+import { SimplexNoise } from './simplex-noise.js?v=4';
+import { World, BLOCK, BLOCK_DEFS } from './world.js?v=4';
+import { Player } from './player.js?v=4';
+import { Physics } from './physics.js?v=4';
+import { MobsManager } from './mobs.js?v=4';
+import { InventoryManager, ITEM_SVGS } from './inventory.js?v=4';
+import { Structures } from './structures.js?v=4';
+import { SoundManager } from './sound.js?v=4';
+import { WeatherManager } from './weather.js?v=4';
+import { SmartWatchController } from './smartwatch.js?v=4';
+import { MultiplayerManager } from './multiplayer.js?v=4';
 
 export class Engine {
   constructor() {
@@ -17,6 +20,8 @@ export class Engine {
     this.gameState = 'start'; // 'start', 'playing', 'paused', 'inventory', 'gameover'
     this.seed = '';
     this.gameMode = 'story'; // 'story' or 'creative'
+    this.multiplayer = new MultiplayerManager(this);
+    this.smartwatch = new SmartWatchController(this);
 
     // Story Quest State
     this.storySlideIndex = 0;
@@ -122,7 +127,10 @@ export class Engine {
     this.moonLight.position.set(-50, -100, -50);
     this.scene.add(this.moonLight);
 
-    // 5. Controls setup
+    // 5. Initialize Voxel Sun, Moon, Halos, and Starfield
+    this.initCelestialBodies();
+
+    // 6. Controls setup
     this.controls = new PointerLockControls(this.camera, document.body);
     this.scene.add(this.controls.getObject());
 
@@ -131,40 +139,191 @@ export class Engine {
   }
 
   initUI() {
-    // Check if saved game exists to enable/disable load button
-    const hasSave = localStorage.getItem('vivefall_save');
-    const loadBtn = document.getElementById('btn-load');
-    if (hasSave && loadBtn) {
-      loadBtn.classList.remove('disabled');
-      loadBtn.removeAttribute('disabled');
+    this.activeWorldId = null;
+
+    // Main Menu Navigation Binds
+    const btnMenuPlay = document.getElementById('btn-menu-play');
+    const btnMenuMultiplayer = document.getElementById('btn-menu-multiplayer');
+    const btnMenuSettings = document.getElementById('btn-menu-settings');
+    const btnOpenCreate = document.getElementById('btn-open-create-world');
+    
+    const btnPlayBack = document.getElementById('btn-play-back');
+    const btnCreateBack = document.getElementById('btn-create-back');
+    const btnMultiplayerBack = document.getElementById('btn-multiplayer-back');
+    const btnSettingsBack = document.getElementById('btn-settings-back');
+
+    if (btnMenuPlay) {
+      btnMenuPlay.addEventListener('click', () => this.switchMenuView('play'));
+    }
+    if (btnMenuMultiplayer) {
+      btnMenuMultiplayer.addEventListener('click', () => this.switchMenuView('multiplayer'));
+    }
+    if (btnMenuSettings) {
+      btnMenuSettings.addEventListener('click', () => this.switchMenuView('settings'));
+    }
+    if (btnOpenCreate) {
+      btnOpenCreate.addEventListener('click', () => this.switchMenuView('create'));
     }
 
-    // Start Screen Button binds
-    const btnStory = document.getElementById('btn-story');
-    const btnCreative = document.getElementById('btn-creative');
-    const btnPlay = document.getElementById('btn-play');
+    if (btnPlayBack) {
+      btnPlayBack.addEventListener('click', () => this.switchMenuView('root'));
+    }
+    if (btnCreateBack) {
+      btnCreateBack.addEventListener('click', () => this.switchMenuView('play'));
+    }
+    if (btnMultiplayerBack) {
+      btnMultiplayerBack.addEventListener('click', () => this.switchMenuView('root'));
+    }
+    if (btnSettingsBack) {
+      btnSettingsBack.addEventListener('click', () => this.switchMenuView('root'));
+    }
 
-    if (btnStory) {
-      btnStory.addEventListener('click', () => {
+    // Multiplayer Hub Tab Switching
+    document.querySelectorAll('.mp-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-mptab');
+        document.querySelectorAll('.mp-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        ['host', 'join', 'saved'].forEach(t => {
+          const panel = document.getElementById(`mp-panel-${t}`);
+          if (panel) {
+            if (t === tab) panel.classList.remove('hidden');
+            else panel.classList.add('hidden');
+          }
+        });
+        if (tab === 'saved') this.renderSavedMultiplayerWorlds();
+      });
+    });
+
+    // Multiplayer Host Mode Selection Cards
+    let mpHostGameMode = 'story';
+    const mpCardStory = document.getElementById('mp-mode-card-story');
+    const mpCardCreative = document.getElementById('mp-mode-card-creative');
+
+    if (mpCardStory) {
+      mpCardStory.addEventListener('click', () => {
+        mpHostGameMode = 'story';
+        mpCardStory.classList.add('active');
+        if (mpCardCreative) mpCardCreative.classList.remove('active');
+      });
+    }
+
+    if (mpCardCreative) {
+      mpCardCreative.addEventListener('click', () => {
+        mpHostGameMode = 'creative';
+        mpCardCreative.classList.add('active');
+        if (mpCardStory) mpCardStory.classList.remove('active');
+      });
+    }
+
+    // Multiplayer Host Random Seed
+    const btnMpSeedRandom = document.getElementById('btn-mp-seed-random');
+    if (btnMpSeedRandom) {
+      btnMpSeedRandom.addEventListener('click', () => {
+        document.getElementById('mp-host-seed').value = Math.random().toString(36).substring(2, 10);
+      });
+    }
+
+    // Multiplayer Host Launch Button
+    const btnMpHostLaunch = document.getElementById('btn-mp-host-launch');
+    if (btnMpHostLaunch) {
+      btnMpHostLaunch.addEventListener('click', async () => {
+        const worldName = document.getElementById('mp-host-world-name').value.trim() || "Zuzu's Realm";
+        const nick = document.getElementById('mp-host-nickname').value.trim() || 'Zuzu_Host';
+        const seed = document.getElementById('mp-host-seed').value.trim() || Math.random().toString(36).substring(2, 10);
+
+        this.seed = seed;
+        this.activeWorldName = worldName;
+        this.gameMode = mpHostGameMode;
+        this.multiplayer.playerName = nick;
+        localStorage.setItem('vivecraft_player_name', nick);
+
+        await this.multiplayer.hostWorld(worldName, seed, mpHostGameMode);
+
+        this.startGame();
+        this.updateMultiplayerHUD();
+      });
+    }
+
+    // Multiplayer Join Launch Button
+    const btnMpJoinLaunch = document.getElementById('btn-mp-join-launch');
+    if (btnMpJoinLaunch) {
+      btnMpJoinLaunch.addEventListener('click', async () => {
+        const code = document.getElementById('mp-join-code').value.trim().toUpperCase();
+        const nick = document.getElementById('mp-join-nickname').value.trim() || 'Zuzu_Guest';
+        if (!code) {
+          alert('Please enter a room code!');
+          return;
+        }
+
+        this.activeWorldName = `Realm ${code}`;
+        this.multiplayer.playerName = nick;
+        localStorage.setItem('vivecraft_player_name', nick);
+
+        // Show connecting overlay while syncing terrain with host
+        const connOverlay = document.getElementById('mp-connecting-overlay');
+        if (connOverlay) {
+          connOverlay.classList.remove('hidden');
+          const connText = document.getElementById('mp-connecting-text');
+          if (connText) connText.textContent = `Connecting to Host [${code}] & syncing terrain seed...`;
+        }
+
+        await this.multiplayer.joinWorld(code, nick);
+      });
+    }
+
+    // Cancel multiplayer connecting button
+    const btnCancelMp = document.getElementById('btn-cancel-mp-connect');
+    if (btnCancelMp) {
+      btnCancelMp.addEventListener('click', () => {
+        const connOverlay = document.getElementById('mp-connecting-overlay');
+        if (connOverlay) connOverlay.classList.add('hidden');
+        if (this.multiplayer && this.multiplayer.joinTimeout) {
+          clearTimeout(this.multiplayer.joinTimeout);
+        }
+      });
+    }
+
+    // World Creation Mode Selection Cards
+    const cardStory = document.getElementById('mode-card-story');
+    const cardCreative = document.getElementById('mode-card-creative');
+
+    if (cardStory) {
+      cardStory.addEventListener('click', () => {
         this.gameMode = 'story';
-        btnStory.classList.add('active');
-        if (btnCreative) btnCreative.classList.remove('active');
-        if (btnPlay) btnPlay.textContent = "PLAY STORY MODE";
+        cardStory.classList.add('active');
+        if (cardCreative) cardCreative.classList.remove('active');
       });
     }
 
-    if (btnCreative) {
-      btnCreative.addEventListener('click', () => {
+    if (cardCreative) {
+      cardCreative.addEventListener('click', () => {
         this.gameMode = 'creative';
-        btnCreative.classList.add('active');
-        if (btnStory) btnStory.classList.remove('active');
-        if (btnPlay) btnPlay.textContent = "PLAY CREATIVE MODE";
+        cardCreative.classList.add('active');
+        if (cardStory) cardStory.classList.remove('active');
       });
     }
 
-    if (btnPlay) {
-      btnPlay.addEventListener('click', () => {
-        this.seed = document.getElementById('world-seed').value || Math.random().toString(36).substring(2, 10);
+    // Randomize Seed Button
+    const btnSeedRandom = document.getElementById('btn-seed-random');
+    if (btnSeedRandom) {
+      btnSeedRandom.addEventListener('click', () => {
+        const randomSeed = Math.random().toString(36).substring(2, 10);
+        document.getElementById('world-seed').value = randomSeed;
+      });
+    }
+
+    // Launch World Button
+    const btnLaunch = document.getElementById('btn-play-create-start');
+    if (btnLaunch) {
+      btnLaunch.addEventListener('click', () => {
+        const worldName = document.getElementById('world-name-input').value.trim() || 'My Voxel World';
+        const seedInput = document.getElementById('world-seed').value.trim() || Math.random().toString(36).substring(2, 10);
+        
+        this.seed = seedInput;
+        this.activeWorldName = worldName;
+        this.activeWorldId = 'world_' + Date.now();
+
         if (this.gameMode === 'story') {
           this.showStorySlideshow(false);
         } else {
@@ -172,6 +331,22 @@ export class Engine {
         }
       });
     }
+
+    // Settings Render Distance Slider
+    const renderSlider = document.getElementById('setting-render-distance');
+    const renderValLabel = document.getElementById('val-render-distance');
+    if (renderSlider && renderValLabel) {
+      renderSlider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        renderValLabel.textContent = `${val} Chunks`;
+        if (this.world) {
+          this.world.renderDistance = val;
+        }
+      });
+    }
+
+    // Initial render of saved worlds list
+    this.renderSavedWorldsList();
 
     // Story Slideshow Binds
     document.getElementById('btn-story-prev').addEventListener('click', () => this.prevStorySlide());
@@ -184,12 +359,6 @@ export class Engine {
         this.startGame();
       }
     });
-
-    if (loadBtn) {
-      loadBtn.addEventListener('click', () => {
-        this.loadGame();
-      });
-    }
 
     // Pause Menu binds
     document.getElementById('btn-resume').addEventListener('click', () => {
@@ -258,7 +427,7 @@ export class Engine {
 
     // PointerLock event listeners
     this.controls.addEventListener('lock', () => {
-      if (this.gameState === 'inventory' || this.gameState === 'start' || this.gameState === 'gameover') return;
+      if (this.gameState === 'inventory' || this.gameState === 'start' || this.gameState === 'gameover' || this.gameState === 'smartwatch') return;
       this.gameState = 'playing';
       document.getElementById('pause-screen').classList.add('hidden');
       document.getElementById('ui-screen').classList.add('hidden');
@@ -289,15 +458,6 @@ export class Engine {
     document.getElementById('hud').classList.remove('hidden');
     this.gameState = 'playing';
 
-    const watchHud = document.getElementById('smartwatch-hud');
-    if (watchHud) {
-      if (this.gameMode === 'story') {
-        watchHud.classList.remove('hidden');
-      } else {
-        watchHud.classList.add('hidden');
-      }
-    }
-
     // Clear scene (remove any existing world blocks/entities)
     // Keep lights, controls camera
     while(this.scene.children.length > 0){ 
@@ -306,7 +466,13 @@ export class Engine {
     this.scene.add(this.ambientLight);
     this.scene.add(this.sunLight);
     this.scene.add(this.moonLight);
+    if (this.celestialGroup) this.scene.add(this.celestialGroup);
     this.scene.add(this.controls.getObject());
+
+    // Clean up existing player event listeners to prevent duplicate listener accumulation
+    if (this.player && typeof this.player.cleanup === 'function') {
+      this.player.cleanup();
+    }
 
     // Initialize systems
     this.noise = new SimplexNoise(this.seed);
@@ -323,6 +489,20 @@ export class Engine {
     this.sounds = new SoundManager();
     this.arrows = [];
     this.initTorchLightsPool();
+
+    // Initialize Weather & SmartWatch
+    if (this.weather) this.weather.cleanup();
+    this.weather = new WeatherManager(this);
+    if (!this.smartwatch) {
+      this.smartwatch = new SmartWatchController(this);
+    } else {
+      this.smartwatch.refreshMessengerHeader();
+    }
+
+    const watchHud = document.getElementById('smartwatch-hud');
+    if (watchHud) {
+      watchHud.classList.remove('hidden');
+    }
 
     // Initial world generation
     this.world.generateAroundPlayer();
@@ -410,8 +590,10 @@ export class Engine {
   }
 
   updateTimeCycle(delta) {
-    // Advance time
-    this.timeOfDay = (this.timeOfDay + delta * this.timeScale * 20) % 24000;
+    // Advance time (unless paused via SmartWatch)
+    if (!this.isTimePaused) {
+      this.timeOfDay = (this.timeOfDay + delta * this.timeScale * 20) % 24000;
+    }
     
     // Convert ticks to 24 hour string format
     const totalMinutes = Math.floor((this.timeOfDay / 24000) * 1440);
@@ -429,15 +611,75 @@ export class Engine {
 
     document.getElementById('time-display').textContent = `Day ${Math.floor(this.clock.getElapsedTime() / 300) + 1} - ${hoursStr}:${minsStr} (${cyclePhase})`;
 
-    // Rotate Sun and Moon
+    // Calculate orbital angle (Sun rises in East +X, peaks overhead +Y, sets in West -X)
     const angle = ((this.timeOfDay - 6000) / 24000) * Math.PI * 2;
     
-    // Positions
-    const sunY = Math.sin(angle);
-    const sunX = Math.cos(angle);
-    
-    this.sunLight.position.set(sunX * 100, sunY * 100, 50);
-    this.moonLight.position.set(-sunX * 100, -sunY * 100, -50);
+    const distance = 260;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    const px = this.player ? this.player.position.x : 0;
+    const py = this.player ? this.player.position.y : 0;
+    const pz = this.player ? this.player.position.z : 0;
+
+    // Precise 3D World Positions for Sun and Moon
+    const sunX = px + cosA * distance;
+    const sunY = py + sinA * distance;
+    const sunZ = pz + 40;
+
+    const moonX = px - cosA * distance;
+    const moonY = py - sinA * distance;
+    const moonZ = pz - 40;
+
+    // 1. Position Directional Lights EXACTLY at Sun and Moon positions!
+    this.sunLight.position.set(sunX, sunY, sunZ);
+    this.moonLight.position.set(moonX, moonY, moonZ);
+
+    // 2. Position 3D Voxel Sun and Moon Meshes DIRECTLY at the light sources!
+    if (this.sunMesh) {
+      this.sunMesh.position.set(sunX, sunY, sunZ);
+      this.sunMesh.lookAt(px, py, pz); // Face player!
+    }
+
+    if (this.moonMesh) {
+      this.moonMesh.position.set(moonX, moonY, moonZ);
+      this.moonMesh.lookAt(px, py, pz); // Face player!
+    }
+
+    if (this.stars) {
+      this.stars.position.set(px, py, pz);
+    }
+
+    // 3. Update Sun & Moon Halo Opacities dynamically based on elevation
+    const sunNormY = sinA;
+    if (this.sunHalo && this.moonHalo) {
+      if (sunNormY > 0) {
+        this.sunHalo.material.opacity = Math.min(1.0, sunNormY * 1.5 + 0.2);
+        this.moonHalo.material.opacity = 0;
+      } else {
+        this.sunHalo.material.opacity = 0;
+        this.moonHalo.material.opacity = Math.min(1.0, -sunNormY * 1.5 + 0.2);
+      }
+    }
+
+    // Twinkling stars in night sky (strictly hidden during daytime!)
+    const isNight = this.timeOfDay > 18000 || this.timeOfDay < 6000;
+    if (this.stars) {
+      this.stars.visible = isNight;
+    }
+    if (this.starMaterial) {
+      if (isNight) {
+        let nightFactor = 1.0;
+        if (this.timeOfDay > 18000 && this.timeOfDay < 20000) {
+          nightFactor = (this.timeOfDay - 18000) / 2000;
+        } else if (this.timeOfDay > 4000 && this.timeOfDay < 6000) {
+          nightFactor = 1.0 - (this.timeOfDay - 4000) / 2000;
+        }
+        this.starMaterial.opacity = (0.75 + Math.sin(performance.now() * 0.003) * 0.2) * nightFactor;
+      } else {
+        this.starMaterial.opacity = 0;
+      }
+    }
 
     // Calculate light intensities and colors
     let skyColor, fogDensity;
@@ -471,10 +713,180 @@ export class Engine {
       fogDensity = 0.022;
     }
 
+    // Weather Atmosphere Modulation
+    if (this.weather) {
+      const prec = this.weather.getEffectivePrecipitation();
+      if (prec === 'rain') {
+        skyColor.lerp(new THREE.Color(0x384c60), 0.5);
+        this.sunLight.intensity *= 0.55;
+        this.ambientLight.intensity *= 0.75;
+        fogDensity = Math.max(fogDensity, 0.024);
+      } else if (prec === 'snow') {
+        skyColor.lerp(new THREE.Color(0xceddec), 0.45);
+        this.sunLight.intensity *= 0.7;
+        this.ambientLight.intensity *= 0.85;
+        fogDensity = Math.max(fogDensity, 0.022);
+      }
+    }
+
     // Set background sky and fog color
     this.scene.background.copy(skyColor);
     this.scene.fog.color.copy(skyColor);
     this.scene.fog.density = fogDensity;
+  }
+
+  initCelestialBodies() {
+    this.celestialGroup = new THREE.Group();
+
+    // 1. Sun Texture (Voxel Radiant Solar Face)
+    const sunCanvas = document.createElement('canvas');
+    sunCanvas.width = 128;
+    sunCanvas.height = 128;
+    const sCtx = sunCanvas.getContext('2d');
+    
+    // Pure bright radiant core center matching Minecraft reference picture
+    sCtx.fillStyle = '#ffffff';
+    sCtx.fillRect(0, 0, 128, 128);
+    sCtx.fillStyle = '#ffffea';
+    sCtx.fillRect(8, 8, 112, 112);
+    
+    // Solar corona edges
+    for (let i = 0; i < 128; i += 8) {
+      if (Math.random() < 0.4) {
+        sCtx.fillStyle = '#ffe082';
+        sCtx.fillRect(i, 0, 8, 8);
+        sCtx.fillRect(i, 120, 8, 8);
+        sCtx.fillRect(0, i, 8, 8);
+        sCtx.fillRect(120, i, 8, 8);
+      }
+    }
+
+    const sunTex = new THREE.CanvasTexture(sunCanvas);
+    sunTex.magFilter = THREE.NearestFilter;
+    sunTex.minFilter = THREE.NearestFilter;
+
+    const sunMat = new THREE.MeshBasicMaterial({ map: sunTex, fog: false });
+    const sunGeom = new THREE.BoxGeometry(32, 32, 32);
+    this.sunMesh = new THREE.Mesh(sunGeom, sunMat);
+    this.celestialGroup.add(this.sunMesh);
+
+    // Sun Volumetric Solar Corona Halo (fog: false)
+    const sunHaloCanvas = document.createElement('canvas');
+    sunHaloCanvas.width = 256;
+    sunHaloCanvas.height = 256;
+    const shCtx = sunHaloCanvas.getContext('2d');
+    const sGrad = shCtx.createRadialGradient(128, 128, 16, 128, 128, 128);
+    sGrad.addColorStop(0, 'rgba(255, 255, 240, 0.98)');
+    sGrad.addColorStop(0.25, 'rgba(255, 210, 80, 0.7)');
+    sGrad.addColorStop(0.55, 'rgba(255, 140, 20, 0.35)');
+    sGrad.addColorStop(0.85, 'rgba(255, 80, 0, 0.1)');
+    sGrad.addColorStop(1.0, 'rgba(255, 50, 0, 0)');
+    shCtx.fillStyle = sGrad;
+    shCtx.fillRect(0, 0, 256, 256);
+
+    const sunHaloTex = new THREE.CanvasTexture(sunHaloCanvas);
+    const sunHaloMat = new THREE.SpriteMaterial({ map: sunHaloTex, transparent: true, blending: THREE.AdditiveBlending, fog: false });
+    this.sunHalo = new THREE.Sprite(sunHaloMat);
+    this.sunHalo.scale.set(220, 220, 1);
+    this.sunMesh.add(this.sunHalo);
+
+    // 2. Moon Texture (Realistic Voxel Lunar Craters)
+    const moonCanvas = document.createElement('canvas');
+    moonCanvas.width = 128;
+    moonCanvas.height = 128;
+    const mCtx = moonCanvas.getContext('2d');
+    
+    mCtx.fillStyle = '#ffffff';
+    mCtx.fillRect(0, 0, 128, 128);
+    
+    // Lunar Maria & Highland Craters matching reference picture
+    for (let x = 0; x < 128; x += 8) {
+      for (let y = 0; y < 128; y += 8) {
+        const r = Math.random();
+        if (r < 0.3) {
+          mCtx.fillStyle = '#cbd5e1';
+          mCtx.fillRect(x, y, 8, 8);
+        } else if (r < 0.5) {
+          mCtx.fillStyle = '#94a3b8';
+          mCtx.fillRect(x, y, 8, 8);
+        }
+      }
+    }
+    
+    // Distinct crater rings
+    const drawMoonCrater = (cx, cy, radius) => {
+      mCtx.fillStyle = '#475569';
+      mCtx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+      mCtx.fillStyle = '#64748b';
+      mCtx.fillRect(cx - radius + 2, cy - radius + 2, radius * 2 - 4, radius * 2 - 4);
+      mCtx.fillStyle = '#e2e8f0';
+      mCtx.fillRect(cx - radius, cy - radius, radius * 2, 2);
+    };
+    drawMoonCrater(36, 36, 14);
+    drawMoonCrater(88, 76, 18);
+    drawMoonCrater(76, 28, 12);
+    drawMoonCrater(28, 88, 16);
+
+    const moonTex = new THREE.CanvasTexture(moonCanvas);
+    moonTex.magFilter = THREE.NearestFilter;
+    moonTex.minFilter = THREE.NearestFilter;
+
+    const moonMat = new THREE.MeshBasicMaterial({ map: moonTex, fog: false });
+    const moonGeom = new THREE.BoxGeometry(28, 28, 28);
+    this.moonMesh = new THREE.Mesh(moonGeom, moonMat);
+    this.celestialGroup.add(this.moonMesh);
+
+    // Moon Volumetric Lunar Halo (fog: false)
+    const moonHaloCanvas = document.createElement('canvas');
+    moonHaloCanvas.width = 256;
+    moonHaloCanvas.height = 256;
+    const mhCtx = moonHaloCanvas.getContext('2d');
+    const mGrad = mhCtx.createRadialGradient(128, 128, 16, 128, 128, 128);
+    mGrad.addColorStop(0, 'rgba(240, 248, 255, 0.92)');
+    mGrad.addColorStop(0.3, 'rgba(170, 215, 255, 0.55)');
+    mGrad.addColorStop(0.6, 'rgba(90, 160, 255, 0.2)');
+    mGrad.addColorStop(1.0, 'rgba(30, 80, 200, 0)');
+    mhCtx.fillStyle = mGrad;
+    mhCtx.fillRect(0, 0, 256, 256);
+
+    const moonHaloTex = new THREE.CanvasTexture(moonHaloCanvas);
+    const moonHaloMat = new THREE.SpriteMaterial({ map: moonHaloTex, transparent: true, blending: THREE.AdditiveBlending, fog: false });
+    this.moonHalo = new THREE.Sprite(moonHaloMat);
+    this.moonHalo.scale.set(200, 200, 1);
+    this.moonMesh.add(this.moonHalo);
+
+    // 3. Twinkling Night Stars Field (fog: false)
+    const starsGeo = new THREE.BufferGeometry();
+    const starPos = [];
+    
+    for (let i = 0; i < 350; i++) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      const r = 270;
+      
+      const x = r * Math.sin(phi) * Math.cos(theta);
+      const y = r * Math.sin(phi) * Math.sin(theta);
+      const z = r * Math.cos(phi);
+
+      starPos.push(x, y, z);
+    }
+
+    starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+    this.starMaterial = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 3.5,
+      transparent: true,
+      opacity: 0,
+      fog: false
+    });
+    
+    this.stars = new THREE.Points(starsGeo, this.starMaterial);
+    this.stars.visible = false;
+    this.celestialGroup.add(this.stars);
+
+    this.scene.add(this.celestialGroup);
   }
 
   onWindowResize() {
@@ -505,6 +917,9 @@ export class Engine {
         // Update Villagers AI / physics
         this.mobs.update(delta);
 
+        // Update TNT Primed Explosives & Fuse animations
+        this.updatePrimedTNTs(delta);
+
         // Update Arrows projectiles
         this.updateArrows(delta);
 
@@ -516,14 +931,28 @@ export class Engine {
           this.updateTorchLights();
         }
 
+        // Update Biome HUD badge
+        if (!this.biomeScanTimer) this.biomeScanTimer = 0;
+        this.biomeScanTimer++;
+        if (this.biomeScanTimer >= 10) {
+          this.biomeScanTimer = 0;
+          this.updateBiomeHUD();
+        }
+
         // Update Item Drops physics
         this.updateItemDrops(delta);
 
-        // Update TNT fuses & explosions
-        this.updateTNT(delta);
-
         // Update Cherry Leaves particle petals
         this.updatePetals(delta);
+
+        // Update Biome-Specific Weather Manager
+        if (this.weather) this.weather.update(delta);
+
+        // Update SmartWatch OS HUD & Debugger
+        if (this.smartwatch) this.smartwatch.update(delta);
+
+        // Update Multiplayer Peers, Remote Avatars & Offline Sync
+        if (this.multiplayer) this.multiplayer.update(delta);
 
         // Make directional shadow camera follow player position dynamically
         if (this.player && this.sunLight.castShadow) {
@@ -543,6 +972,33 @@ export class Engine {
     // Render Scene
     this.renderer.render(this.scene, this.camera);
   };
+
+  updateBiomeHUD() {
+    if (!this.player || !this.world) return;
+    const px = Math.floor(this.player.position.x);
+    const pz = Math.floor(this.player.position.z);
+    const currentBiome = this.world.getBiome(px, pz);
+
+    if (this.currentDisplayedBiome === currentBiome) return;
+    this.currentDisplayedBiome = currentBiome;
+
+    const displayEl = document.getElementById('biome-display');
+    if (!displayEl) return;
+
+    const biomeData = {
+      mountains: { name: 'Alpine Peaks', icon: '🏔️' },
+      snow: { name: 'Frozen Tundra', icon: '❄️' },
+      jungle: { name: 'Tropical Jungle', icon: '🌴' },
+      cherry_blossom: { name: 'Cherry Blossom Hills', icon: '🌸' },
+      desert: { name: 'Arid Desert', icon: '🌵' },
+      forest: { name: 'Dark Forest', icon: '🌲' },
+      floral: { name: 'Floral Meadow', icon: '🌺' },
+      plains: { name: 'Sunlit Plains', icon: '🌾' }
+    };
+
+    const data = biomeData[currentBiome] || biomeData.plains;
+    displayEl.textContent = `Biome: ${data.icon} ${data.name}`;
+  }
 
   initClouds() {
     if (this.cloudsGroup) {
@@ -753,11 +1209,19 @@ export class Engine {
       'tnt': 22,
       'redstone_wire': 23,
       'lever': 24,
-      'button': 25
+      'button': 25,
+      'snow_grass': World.BLOCK.SNOW_GRASS,
+      'snow_block': World.BLOCK.SNOW, 'snow': World.BLOCK.SNOW,
+      'ice': World.BLOCK.ICE,
+      'pine_log': World.BLOCK.PINE_WOOD, 'pine_wood': World.BLOCK.PINE_WOOD,
+      'pine_leaves': World.BLOCK.PINE_LEAVES,
+      'jungle_log': World.BLOCK.JUNGLE_WOOD, 'jungle_wood': World.BLOCK.JUNGLE_WOOD,
+      'jungle_leaves': World.BLOCK.JUNGLE_LEAVES,
+      'mossy_cobblestone': World.BLOCK.MOSSY_COBBLE
     };
 
     let mesh = null;
-    const blockId = nameMap[itemId] || 0;
+    let blockId = (this.player ? this.player.getItemBlockId(itemId) : 0) || nameMap[itemId] || 0;
 
     if (blockId !== 0 && World.BLOCK_DEFS[blockId]) {
       const def = World.BLOCK_DEFS[blockId];
@@ -808,9 +1272,16 @@ export class Engine {
         const texture = new THREE.CanvasTexture(canvas);
         texture.magFilter = THREE.NearestFilter;
         texture.minFilter = THREE.NearestFilter;
+
+        // Draw initial fallback backdrop immediately
+        ctx.fillStyle = '#e8a838';
+        ctx.fillRect(4, 4, 56, 56);
+        texture.needsUpdate = true;
+
         mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide });
 
         img.onload = () => {
+          ctx.clearRect(0, 0, 64, 64);
           ctx.drawImage(img, 0, 0, 64, 64);
           texture.needsUpdate = true;
           URL.revokeObjectURL(url);
@@ -1037,11 +1508,487 @@ export class Engine {
     }
   }
 
+  switchMenuView(viewName) {
+    const views = ['root', 'play', 'create', 'settings'];
+    views.forEach(v => {
+      const el = document.getElementById(`menu-view-${v}`);
+      if (el) {
+        if (v === viewName) {
+          el.classList.remove('hidden');
+        } else {
+          el.classList.add('hidden');
+        }
+      }
+    });
+
+    if (viewName === 'play') {
+      this.renderSavedWorldsList();
+    }
+  }
+
+  // TNT, Lever, Button & Copper Signal Circuit Mechanics
+  igniteTNT(x, y, z, fuseTime = 3.0) {
+    if (!this.world) return;
+    const blockId = this.world.getBlock(x, y, z);
+    if (blockId !== BLOCK.TNT && fuseTime === 3.0) return;
+
+    // Clear static TNT block
+    this.world.setBlock(x, y, z, BLOCK.AIR, true);
+
+    // Create 3D Primed TNT mesh
+    const tntGroup = new THREE.Group();
+    tntGroup.position.set(x + 0.5, y + 0.5, z + 0.5);
+
+    const geom = new THREE.BoxGeometry(0.98, 0.98, 0.98);
+    const mat = this.world.material.clone();
+    const mesh = new THREE.Mesh(geom, mat);
+    tntGroup.add(mesh);
+
+    // Flashing white overlay
+    const flashGeom = new THREE.BoxGeometry(1.0, 1.0, 1.0);
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+    const flashMesh = new THREE.Mesh(flashGeom, flashMat);
+    tntGroup.add(flashMesh);
+
+    this.scene.add(tntGroup);
+
+    if (!this.primedTNTs) this.primedTNTs = [];
+    this.primedTNTs.push({
+      group: tntGroup,
+      flashMesh: flashMesh,
+      x: x + 0.5,
+      y: y + 0.5,
+      z: z + 0.5,
+      fuse: fuseTime
+    });
+
+    if (this.sounds && this.sounds.playFuse) {
+      this.sounds.playFuse();
+    }
+  }
+
+  updatePrimedTNTs(delta) {
+    if (!this.primedTNTs || this.primedTNTs.length === 0) return;
+
+    for (let i = 0; i < this.primedTNTs.length; i++) {
+      const tnt = this.primedTNTs[i];
+      tnt.fuse -= delta;
+
+      // Flashing white effect
+      const flashSpeed = tnt.fuse < 1.0 ? 16 : 8;
+      const isWhite = Math.floor(tnt.fuse * flashSpeed) % 2 === 0;
+      tnt.flashMesh.material.opacity = isWhite ? 0.75 : 0.0;
+
+      // Subtle pulse scaling
+      const pulse = 1.0 + Math.sin(tnt.fuse * 14) * 0.06;
+      tnt.group.scale.set(pulse, pulse, pulse);
+
+      // Fuse smoke particles
+      if (Math.random() < 0.3) {
+        this.spawnSmokeParticle(tnt.x, tnt.y + 0.6, tnt.z);
+      }
+
+      if (tnt.fuse <= 0) {
+        // Detonate TNT!
+        this.detonateTNT(tnt.x, tnt.y, tnt.z);
+        this.scene.remove(tnt.group);
+        this.primedTNTs.splice(i, 1);
+        i--;
+      }
+    }
+  }
+
+  detonateTNT(x, y, z) {
+    // Explosion sound & Camera Shake
+    if (this.sounds && this.sounds.playExplosion) {
+      this.sounds.playExplosion();
+    }
+
+    const radius = 3.5;
+    const rSq = radius * radius;
+
+    const minX = Math.floor(x - radius);
+    const maxX = Math.ceil(x + radius);
+    const minY = Math.max(0, Math.floor(y - radius));
+    const maxY = Math.min(63, Math.ceil(y + radius));
+    const minZ = Math.floor(z - radius);
+    const maxZ = Math.ceil(z + radius);
+
+    // 1. Voxel Block Destruction & Drops
+    for (let bx = minX; bx <= maxX; bx++) {
+      for (let by = minY; by <= maxY; by++) {
+        for (let bz = minZ; bz <= maxZ; bz++) {
+          const dx = bx + 0.5 - x;
+          const dy = by + 0.5 - y;
+          const dz = bz + 0.5 - z;
+          const distSq = dx * dx + dy * dy + dz * dz;
+
+          if (distSq <= rSq) {
+            const blockId = this.world.getBlock(bx, by, bz);
+            if (blockId !== BLOCK.AIR && blockId !== BLOCK.WATER) {
+              this.world.setBlock(bx, by, bz, BLOCK.AIR, true);
+
+              // 75% chance to spawn 3D mini-voxel item drop
+              if (Math.random() < 0.75) {
+                const itemId = this.getDropItemIdForBlock(blockId);
+                if (itemId) {
+                  this.spawnItemDrop(bx + 0.5, by + 0.5, bz + 0.5, itemId);
+                }
+              }
+
+              // Chain reaction: If neighboring TNT is hit, ignite with short fuse!
+              if (blockId === BLOCK.TNT) {
+                this.igniteTNT(bx, by, bz, 0.2 + Math.random() * 0.3);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Fiery Explosion Particles
+    for (let p = 0; p < 30; p++) {
+      this.spawnExplosionParticle(x, y, z);
+    }
+
+    // 3. Player Knockback & Damage
+    if (this.player) {
+      const pdx = this.player.position.x - x;
+      const pdy = this.player.position.y - y;
+      const pdz = this.player.position.z - z;
+      const pDist = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz);
+
+      if (pDist <= 6.0) {
+        const force = (6.0 - pDist) / 6.0;
+        const damage = Math.round(force * 14);
+        if (damage > 0) {
+          this.player.takeDamage(damage, "Blown up by TNT!");
+        }
+        // Knockback vector
+        this.player.velocity.x += (pdx / (pDist + 0.1)) * force * 15;
+        this.player.velocity.y += force * 12;
+        this.player.velocity.z += (pdz / (pDist + 0.1)) * force * 15;
+      }
+    }
+  }
+
+  toggleLever(x, y, z) {
+    if (this.sounds && this.sounds.playClick) {
+      this.sounds.playClick();
+    }
+    this.triggerCopperSignal(x, y, z);
+  }
+
+  pressButton(x, y, z) {
+    if (this.sounds && this.sounds.playClick) {
+      this.sounds.playClick();
+    }
+    this.triggerCopperSignal(x, y, z);
+  }
+
+  toggleLantern(x, y, z) {
+    if (this.sounds && this.sounds.playClick) {
+      this.sounds.playClick();
+    }
+    const current = this.world.getBlock(x, y, z);
+    if (current === BLOCK.LANTERN_ON) {
+      this.world.setBlock(x, y, z, BLOCK.LANTERN, true);
+      this.removePointLight(x, y, z);
+    } else {
+      this.world.setBlock(x, y, z, BLOCK.LANTERN_ON, true);
+      this.addPointLight(x, y, z, 0xfffaed, 1.5, 14); // Whitish radiant glow
+      this.spawnSparkParticle(x + 0.5, y + 0.5, z + 0.5);
+    }
+  }
+
+  toggleGlowBlock(x, y, z) {
+    if (this.sounds && this.sounds.playClick) {
+      this.sounds.playClick();
+    }
+    const current = this.world.getBlock(x, y, z);
+    if (current === BLOCK.GLOW_BLOCK_ON) {
+      this.world.setBlock(x, y, z, BLOCK.GLOW_BLOCK, true);
+      this.removePointLight(x, y, z);
+    } else {
+      this.world.setBlock(x, y, z, BLOCK.GLOW_BLOCK_ON, true);
+      this.addPointLight(x, y, z, 0x38d4f0, 1.6, 16); // Bluish radiant glow
+      this.spawnSparkParticle(x + 0.5, y + 0.5, z + 0.5);
+    }
+  }
+
+  addPointLight(x, y, z, color, intensity, distance) {
+    if (!this.pointLights) this.pointLights = new Map();
+    const key = `${x},${y},${z}`;
+    if (this.pointLights.has(key)) {
+      const pl = this.pointLights.get(key);
+      pl.color.setHex(color);
+      pl.intensity = intensity;
+      return;
+    }
+    const light = new THREE.PointLight(color, intensity, distance);
+    light.position.set(x + 0.5, y + 0.5, z + 0.5);
+    this.scene.add(light);
+    this.pointLights.set(key, light);
+  }
+
+  removePointLight(x, y, z) {
+    if (!this.pointLights) return;
+    const key = `${x},${y},${z}`;
+    if (this.pointLights.has(key)) {
+      const light = this.pointLights.get(key);
+      this.scene.remove(light);
+      if (light.dispose) light.dispose();
+      this.pointLights.delete(key);
+    }
+  }
+
+  triggerCopperSignal(startX, startY, startZ) {
+    // Breadth-First Search (BFS) for Copper Wires, TNT, Lanterns, and Glow Blocks
+    const visited = new Set();
+    const queue = [{ x: startX, y: startY, z: startZ, dist: 0 }];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      const key = `${current.x},${current.y},${current.z}`;
+      if (visited.has(key) || current.dist > 18) continue;
+      visited.add(key);
+
+      // Check all 6 directions
+      const dirs = [
+        [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]
+      ];
+
+      for (const d of dirs) {
+        const nx = current.x + d[0];
+        const ny = current.y + d[1];
+        const nz = current.z + d[2];
+        const nKey = `${nx},${ny},${nz}`;
+
+        if (visited.has(nKey)) continue;
+        const nBlock = this.world.getBlock(nx, ny, nz);
+
+        if (nBlock === BLOCK.TNT) {
+          this.igniteTNT(nx, ny, nz);
+        } else if (nBlock === BLOCK.LANTERN || nBlock === BLOCK.LANTERN_ON) {
+          this.toggleLantern(nx, ny, nz);
+          this.spawnSparkParticle(nx + 0.5, ny + 0.5, nz + 0.5);
+        } else if (nBlock === BLOCK.GLOW_BLOCK || nBlock === BLOCK.GLOW_BLOCK_ON) {
+          this.toggleGlowBlock(nx, ny, nz);
+          this.spawnSparkParticle(nx + 0.5, ny + 0.5, nz + 0.5);
+        } else if (nBlock === BLOCK.REDSTONE_WIRE || nBlock === BLOCK.COPPER_WIRE) {
+          // Spark particle on copper wire
+          this.spawnSparkParticle(nx + 0.5, ny + 0.1, nz + 0.5);
+          queue.push({ x: nx, y: ny, z: nz, dist: current.dist + 1 });
+        }
+      }
+    }
+  }
+
+  spawnSmokeParticle(x, y, z) {
+    const geo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.8 });
+    const p = new THREE.Mesh(geo, mat);
+    p.position.set(x + (Math.random() - 0.5) * 0.2, y, z + (Math.random() - 0.5) * 0.2);
+    this.scene.add(p);
+
+    let life = 0;
+    const interval = setInterval(() => {
+      life += 0.05;
+      p.position.y += 0.03;
+      p.scale.addScalar(0.04);
+      mat.opacity -= 0.04;
+      if (life >= 0.8 || mat.opacity <= 0) {
+        clearInterval(interval);
+        this.scene.remove(p);
+        geo.dispose();
+        mat.dispose();
+      }
+    }, 40);
+  }
+
+  spawnExplosionParticle(x, y, z) {
+    const color = ['#ff6600', '#ffcc00', '#ff3300', '#444444'][Math.floor(Math.random() * 4)];
+    const geo = new THREE.BoxGeometry(0.35, 0.35, 0.35);
+    const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+    const p = new THREE.Mesh(geo, mat);
+    
+    p.position.set(x, y, z);
+    const vx = (Math.random() - 0.5) * 12;
+    const vy = Math.random() * 8 + 2;
+    const vz = (Math.random() - 0.5) * 12;
+
+    this.scene.add(p);
+
+    let life = 0;
+    const interval = setInterval(() => {
+      life += 0.05;
+      p.position.x += vx * 0.05;
+      p.position.y += vy * 0.05;
+      p.position.z += vz * 0.05;
+      p.scale.multiplyScalar(0.96);
+      mat.opacity -= 0.04;
+
+      if (life >= 0.7 || mat.opacity <= 0) {
+        clearInterval(interval);
+        this.scene.remove(p);
+        geo.dispose();
+        mat.dispose();
+      }
+    }, 30);
+  }
+
+  spawnSparkParticle(x, y, z) {
+    const geo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xf97316 });
+    const p = new THREE.Mesh(geo, mat);
+    p.position.set(x + (Math.random() - 0.5) * 0.3, y, z + (Math.random() - 0.5) * 0.3);
+    this.scene.add(p);
+
+    setTimeout(() => {
+      this.scene.remove(p);
+      geo.dispose();
+      mat.dispose();
+    }, 350);
+  }
+
+  getDropItemIdForBlock(blockId) {
+    if (blockId === BLOCK.GRASS) return 'dirt';
+    if (blockId === BLOCK.DIRT) return 'dirt';
+    if (blockId === BLOCK.STONE) return 'cobblestone';
+    if (blockId === BLOCK.COBBLESTONE) return 'cobblestone';
+    if (blockId === BLOCK.WOOD) return 'wood_log';
+    if (blockId === BLOCK.LEAVES) return 'leaves';
+    if (blockId === BLOCK.SAND) return 'sand';
+    if (blockId === BLOCK.GLASS) return 'glass';
+    if (blockId === BLOCK.CRAFTING_TABLE) return 'crafting_table';
+    if (blockId === BLOCK.CHEST) return 'chest';
+    if (blockId === BLOCK.PLANKS) return 'wooden_planks';
+    if (blockId === BLOCK.BED_HEAD || blockId === BLOCK.BED_FOOT) return 'bed';
+    if (blockId === BLOCK.TNT) return 'tnt';
+    if (blockId === BLOCK.COPPER_WIRE || blockId === BLOCK.REDSTONE_WIRE) return 'copper_wire';
+    if (blockId === BLOCK.LEVER) return 'lever';
+    if (blockId === BLOCK.BUTTON) return 'button';
+    if (blockId === BLOCK.SNOW_GRASS) return 'snow_grass';
+    if (blockId === BLOCK.SNOW) return 'snow_block';
+    if (blockId === BLOCK.ICE) return 'ice';
+    if (blockId === BLOCK.PINE_WOOD) return 'pine_log';
+    if (blockId === BLOCK.PINE_LEAVES) return 'pine_leaves';
+    if (blockId === BLOCK.JUNGLE_WOOD) return 'jungle_log';
+    if (blockId === BLOCK.JUNGLE_LEAVES) return 'jungle_leaves';
+    if (blockId === BLOCK.MOSSY_COBBLE) return 'mossy_cobblestone';
+    if (blockId === BLOCK.LANTERN || blockId === BLOCK.LANTERN_ON) return 'lantern';
+    if (blockId === BLOCK.GLOW_BLOCK || blockId === BLOCK.GLOW_BLOCK_ON) return 'glow_block';
+    return null;
+  }
+  getSavedWorldsIndex() {
+    try {
+      const rawIndex = localStorage.getItem('vivefall_worlds_index');
+      let index = rawIndex ? JSON.parse(rawIndex) : [];
+
+      // Check legacy single save migration
+      const legacySave = localStorage.getItem('vivefall_save');
+      if (legacySave && !index.some(w => w.id === 'legacy_save')) {
+        let legacyData = {};
+        try { legacyData = JSON.parse(legacySave); } catch (e) {}
+        const legacyWorld = {
+          id: 'legacy_save',
+          name: 'Legacy World',
+          seed: legacyData.seed || 'default',
+          gameMode: legacyData.gameMode || 'story',
+          lastPlayed: 'Saved Session'
+        };
+        index.unshift(legacyWorld);
+        localStorage.setItem('vivefall_world_legacy_save', legacySave);
+        localStorage.setItem('vivefall_worlds_index', JSON.stringify(index));
+      }
+      return index;
+    } catch (e) {
+      console.error('Failed reading worlds index:', e);
+      return [];
+    }
+  }
+
+  renderSavedWorldsList() {
+    const container = document.getElementById('saved-worlds-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const worlds = this.getSavedWorldsIndex();
+
+    if (worlds.length === 0) {
+      container.innerHTML = `
+        <div class="empty-worlds-card">
+          <div class="empty-icon">🗺️</div>
+          <div class="empty-title">No Saved Worlds</div>
+          <div class="empty-desc">Click "Create New World" above to begin your adventure!</div>
+        </div>
+      `;
+      return;
+    }
+
+    worlds.forEach(world => {
+      const card = document.createElement('div');
+      card.className = 'world-item-card';
+
+      const modeBadge = world.gameMode === 'story' ? '<span class="mode-badge story">STORY MODE</span>' : '<span class="mode-badge">CREATIVE</span>';
+      
+      card.innerHTML = `
+        <div class="world-info">
+          <div class="world-title-row">
+            <span class="world-name">${world.name || 'Voxel World'}</span>
+            ${modeBadge}
+          </div>
+          <div class="world-meta">Seed: <code>${world.seed}</code> • ${world.lastPlayed || 'Recent'}</div>
+        </div>
+        <div class="world-actions">
+          <button class="world-action-btn play-btn" data-id="${world.id}">⚔️ PLAY</button>
+          <button class="world-action-btn delete-btn" data-id="${world.id}">🗑️</button>
+        </div>
+      `;
+
+      card.querySelector('.play-btn').addEventListener('click', () => {
+        this.loadWorldById(world.id);
+      });
+
+      card.querySelector('.delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.deleteWorldById(world.id);
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  deleteWorldById(worldId) {
+    if (!confirm('Are you sure you want to delete this world?')) return;
+    try {
+      let index = this.getSavedWorldsIndex();
+      index = index.filter(w => w.id !== worldId);
+      localStorage.setItem('vivefall_worlds_index', JSON.stringify(index));
+      localStorage.removeItem('vivefall_world_' + worldId);
+      if (worldId === 'legacy_save') {
+        localStorage.removeItem('vivefall_save');
+      }
+      this.renderSavedWorldsList();
+    } catch (e) {
+      console.error('Failed to delete world:', e);
+    }
+  }
+
   saveGame() {
     if (this.gameState === 'start' || !this.player || !this.world) return;
 
     try {
+      if (!this.activeWorldId) {
+        this.activeWorldId = 'world_' + Date.now();
+      }
+      if (!this.activeWorldName) {
+        this.activeWorldName = 'Voxel World ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+
       const saveData = {
+        id: this.activeWorldId,
+        name: this.activeWorldName,
         seed: this.seed,
         timeOfDay: this.timeOfDay,
         gameMode: this.gameMode,
@@ -1070,7 +2017,27 @@ export class Engine {
         modifications: this.world.modifications
       };
 
+      // Store world save data
+      localStorage.setItem('vivefall_world_' + this.activeWorldId, JSON.stringify(saveData));
       localStorage.setItem('vivefall_save', JSON.stringify(saveData));
+
+      // Update worlds index
+      let index = this.getSavedWorldsIndex();
+      const existingIdx = index.findIndex(w => w.id === this.activeWorldId);
+      const worldMeta = {
+        id: this.activeWorldId,
+        name: this.activeWorldName,
+        seed: this.seed,
+        gameMode: this.gameMode,
+        lastPlayed: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      if (existingIdx >= 0) {
+        index[existingIdx] = worldMeta;
+      } else {
+        index.unshift(worldMeta);
+      }
+      localStorage.setItem('vivefall_worlds_index', JSON.stringify(index));
 
       // Display clean visual feedback popup
       const msg = document.createElement('div');
@@ -1078,52 +2045,47 @@ export class Engine {
       msg.style.top = '30%';
       msg.style.left = '50%';
       msg.style.transform = 'translate(-50%, -50%)';
-      msg.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
-      msg.style.color = '#7baf3a';
+      msg.style.backgroundColor = 'rgba(15, 23, 42, 0.95)';
+      msg.style.color = '#00ffcc';
       msg.style.padding = '15px 30px';
       msg.style.fontFamily = "'VT323', monospace";
       msg.style.fontSize = '32px';
-      msg.style.border = '4px solid #7baf3a';
+      msg.style.border = '3px solid #00ffcc';
+      msg.style.borderRadius = '12px';
+      msg.style.boxShadow = '0 0 25px rgba(0, 255, 204, 0.5)';
       msg.style.zIndex = '9999';
-      msg.textContent = 'GAME SAVED SUCCESSFULLY!';
+      msg.textContent = 'WORLD SAVED SUCCESSFULLY!';
       document.body.appendChild(msg);
 
       setTimeout(() => { msg.remove(); }, 2000);
-
-      // Instantly update title load button
-      const loadBtn = document.getElementById('btn-load');
-      if (loadBtn) {
-        loadBtn.classList.remove('disabled');
-        loadBtn.removeAttribute('disabled');
-      }
     } catch (e) {
       console.error('Failed to save game:', e);
       alert('Save failed: local storage space exceeded.');
     }
   }
 
+  loadWorldById(worldId) {
+    const rawData = localStorage.getItem('vivefall_world_' + worldId) || localStorage.getItem('vivefall_save');
+    if (!rawData) return;
+    this.activeWorldId = worldId;
+    this.loadGameData(rawData);
+  }
+
   loadGame() {
     const rawData = localStorage.getItem('vivefall_save');
     if (!rawData) return;
+    this.loadGameData(rawData);
+  }
 
+  loadGameData(rawData) {
     try {
       const savedData = JSON.parse(rawData);
       
+      this.activeWorldId = savedData.id || this.activeWorldId || 'world_' + Date.now();
+      this.activeWorldName = savedData.name || 'Saved Voxel World';
       this.seed = savedData.seed;
       this.timeOfDay = savedData.timeOfDay;
-      this.gameMode = savedData.gameMode;
-
-      // Update Start Screen inputs
-      document.getElementById('world-seed').value = this.seed || '';
-      const btnStory = document.getElementById('btn-story');
-      const btnCreative = document.getElementById('btn-creative');
-      if (this.gameMode === 'story' || this.gameMode === 'survival') {
-        if (btnStory) btnStory.classList.add('active');
-        if (btnCreative) btnCreative.classList.remove('active');
-      } else {
-        if (btnCreative) btnCreative.classList.add('active');
-        if (btnStory) btnStory.classList.remove('active');
-      }
+      this.gameMode = savedData.gameMode || 'story';
 
       // Hide start screen
       document.getElementById('start-screen').classList.add('hidden');
@@ -1137,7 +2099,13 @@ export class Engine {
       this.scene.add(this.ambientLight);
       this.scene.add(this.sunLight);
       this.scene.add(this.moonLight);
+      if (this.celestialGroup) this.scene.add(this.celestialGroup);
       this.scene.add(this.controls.getObject());
+
+      // Clean up existing player event listeners
+      if (this.player && typeof this.player.cleanup === 'function') {
+        this.player.cleanup();
+      }
 
       // Initialize components
       this.noise = new SimplexNoise(this.seed);
@@ -1154,6 +2122,15 @@ export class Engine {
       this.sounds = new SoundManager();
       this.arrows = [];
       this.initTorchLightsPool();
+
+      // Initialize Weather & SmartWatch
+      if (this.weather) this.weather.cleanup();
+      this.weather = new WeatherManager(this);
+      if (!this.smartwatch) {
+        this.smartwatch = new SmartWatchController(this);
+      } else {
+        this.smartwatch.refreshMessengerHeader();
+      }
 
       // Restore specific loaded states
       // Clean up old legacy save modifications that block doorways or clear beds
@@ -1195,8 +2172,10 @@ export class Engine {
         }
       }
       this.world.modifications = cleanedModifications;
-      this.inventory.storage = savedData.player.inventory.storage;
-      this.inventory.hotbar = savedData.player.inventory.hotbar;
+      if (savedData.player && savedData.player.inventory) {
+        if (savedData.player.inventory.storage) this.inventory.storage = savedData.player.inventory.storage;
+        if (savedData.player.inventory.hotbar) this.inventory.hotbar = savedData.player.inventory.hotbar;
+      }
       
       // Load chests contents mapping
       const chestsMap = new Map();
@@ -1243,8 +2222,7 @@ export class Engine {
 
       const watchHud = document.getElementById('smartwatch-hud');
       if (watchHud) {
-        if (this.gameMode === 'story') watchHud.classList.remove('hidden');
-        else watchHud.classList.add('hidden');
+        watchHud.classList.remove('hidden');
       }
 
       this.player.updateHUD();
@@ -1309,107 +2287,7 @@ export class Engine {
     reader.readAsText(file);
   }
 
-  igniteTNT(x, y, z) {
-    if (this.world.getBlock(x, y, z) === World.BLOCK.TNT) {
-      this.world.setBlock(x, y, z, World.BLOCK.AIR, true);
-      this.spawnPrimedTNT(x + 0.5, y, z + 0.5);
-    }
-  }
 
-  spawnPrimedTNT(x, y, z) {
-    if (!this.tntEntities) this.tntEntities = [];
-    
-    const geom = new THREE.BoxGeometry(0.98, 0.98, 0.98);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const mesh = new THREE.Mesh(geom, mat);
-    mesh.position.set(x, y + 0.5, z);
-    this.scene.add(mesh);
-    this.sounds.playShoot();
-
-    this.tntEntities.push({
-      mesh: mesh,
-      x: x, y: y, z: z,
-      fuse: 2.5
-    });
-  }
-
-  updateTNT(delta) {
-    if (!this.tntEntities) return;
-    for (let i = 0; i < this.tntEntities.length; i++) {
-      const tnt = this.tntEntities[i];
-      tnt.fuse -= delta;
-      
-      const flash = Math.sin(performance.now() * 0.03) > 0;
-      tnt.mesh.material.color.setHex(flash ? 0xffffff : 0xff0000);
-
-      if (tnt.fuse <= 0) {
-        this.explodeTNT(tnt.mesh.position.x, tnt.mesh.position.y, tnt.mesh.position.z);
-        this.scene.remove(tnt.mesh);
-        tnt.mesh.geometry.dispose();
-        tnt.mesh.material.dispose();
-        this.tntEntities.splice(i, 1);
-        i--;
-      }
-    }
-  }
-
-  explodeTNT(ex, ey, ez) {
-    this.sounds.playExplode();
-    const radius = 3.5;
-    const rSq = radius * radius;
-
-    const bx0 = Math.floor(ex - radius), bx1 = Math.floor(ex + radius);
-    const by0 = Math.floor(ey - radius), by1 = Math.floor(ey + radius);
-    const bz0 = Math.floor(ez - radius), bz1 = Math.floor(ez + radius);
-
-    for (let x = bx0; x <= bx1; x++) {
-      for (let y = by0; y <= by1; y++) {
-        for (let z = bz0; z <= bz1; z++) {
-          const dx = x + 0.5 - ex;
-          const dy = y + 0.5 - ey;
-          const dz = z + 0.5 - ez;
-          if (dx*dx + dy*dy + dz*dz <= rSq) {
-            const bid = this.world.getBlock(x, y, z);
-            if (bid !== World.BLOCK.AIR && bid !== World.BLOCK.STONE) {
-              this.world.setBlock(x, y, z, World.BLOCK.AIR, true);
-              if (Math.random() < 0.4) {
-                const defName = World.BLOCK_DEFS[bid]?.name;
-                if (defName) {
-                  this.spawnItemDrop(x + 0.5, y + 0.5, z + 0.5, defName.toLowerCase().replace(/ /g, '_'));
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if (this.player && !this.player.isDead) {
-      const pDist = this.player.position.distanceTo(new THREE.Vector3(ex, ey, ez));
-      if (pDist < radius + 1) {
-        const dmg = Math.floor((1 - pDist / (radius + 2)) * 15);
-        if (dmg > 0) this.player.takeDamage(dmg, "Blown up by TNT");
-      }
-    }
-
-    if (this.mobs) {
-      this.mobs.mobs.forEach(mob => {
-        if (!mob.isDead && mob.position.distanceTo(new THREE.Vector3(ex, ey, ez)) < radius + 1) {
-          mob.takeDamage(15);
-        }
-      });
-    }
-  }
-
-  toggleLever(x, y, z) {
-    this.sounds.playClick();
-    this.checkRedstoneNeighbors(x, y, z);
-  }
-
-  pressButton(x, y, z) {
-    this.sounds.playClick();
-    this.checkRedstoneNeighbors(x, y, z);
-  }
 
   showStorySlideshow(isEnding = false) {
     this.isVictoryEnding = isEnding;
@@ -1538,8 +2416,109 @@ export class Engine {
     this.showStorySlideshow(true);
   }
 
+  switchMenuView(viewName) {
+    const views = ['root', 'play', 'create', 'multiplayer', 'settings'];
+    views.forEach(v => {
+      const el = document.getElementById(`menu-view-${v}`);
+      if (el) {
+        if (v === viewName) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+      }
+    });
+
+    if (viewName === 'play') {
+      this.renderSavedWorldsList();
+    } else if (viewName === 'multiplayer') {
+      this.renderSavedMultiplayerWorlds();
+    }
+  }
+
+  updateMultiplayerHUD() {
+    const indicator = document.getElementById('mp-hud-indicator');
+    const roomEl = document.getElementById('mp-hud-room');
+    const roleEl = document.getElementById('mp-hud-role');
+
+    if (!indicator) return;
+
+    if (this.multiplayer && this.multiplayer.isMultiplayer) {
+      indicator.classList.remove('hidden');
+      if (roomEl) roomEl.textContent = `ROOM: ${this.multiplayer.roomCode}`;
+      if (roleEl) {
+        roleEl.textContent = this.multiplayer.isModerator ? '👑 MOD' : '👤 GUEST';
+        roleEl.style.background = this.multiplayer.isModerator ? '#f59e0b' : '#0284c7';
+        roleEl.style.color = this.multiplayer.isModerator ? '#000' : '#fff';
+      }
+    } else {
+      indicator.classList.add('hidden');
+    }
+  }
+
+  renderSavedMultiplayerWorlds() {
+    const container = document.getElementById('mp-saved-worlds-list');
+    if (!container || !this.multiplayer) return;
+
+    container.innerHTML = '';
+    const worlds = this.multiplayer.getSavedWorlds();
+
+    if (worlds.length === 0) {
+      container.innerHTML = `<div class="empty-worlds-msg" style="padding: 16px; text-align: center; color: #94a3b8; font-size: 14px;">No saved multiplayer worlds yet. Host or join one!</div>`;
+      return;
+    }
+
+    worlds.forEach(w => {
+      const card = document.createElement('div');
+      card.className = 'world-item-card';
+
+      const roleBadge = w.isHost ? '<span class="mode-badge story">👑 HOST (MOD)</span>' : '<span class="mode-badge">👤 GUEST</span>';
+
+      card.innerHTML = `
+        <div class="world-info">
+          <div class="world-title-row">
+            <span class="world-name">${w.worldName || 'Multiplayer Realm'}</span>
+            ${roleBadge}
+          </div>
+          <div class="world-meta">Room: <code>${w.roomCode}</code> • Mode: ${w.gameMode || 'story'}</div>
+        </div>
+        <div class="world-actions">
+          <button class="world-action-btn play-btn" data-code="${w.roomCode}">🔗 RECONNECT</button>
+        </div>
+      `;
+
+      card.querySelector('.play-btn').addEventListener('click', async () => {
+        if (w.isHost) {
+          await this.multiplayer.hostWorld(w.worldName, w.seed, w.gameMode);
+          this.startGame();
+          this.updateMultiplayerHUD();
+        } else {
+          const connOverlay = document.getElementById('mp-connecting-overlay');
+          if (connOverlay) {
+            connOverlay.classList.remove('hidden');
+            const connText = document.getElementById('mp-connecting-text');
+            if (connText) connText.textContent = `Reconnecting to Realm [${w.roomCode}] & syncing world...`;
+          }
+          await this.multiplayer.joinWorld(w.roomCode, this.multiplayer.playerName);
+        }
+      });
+
+      container.appendChild(card);
+    });
+  }
+
   quitGame() {
     this.controls.unlock();
+    if (this.player && typeof this.player.cleanup === 'function') {
+      this.player.cleanup();
+    }
+    if (this.weather) {
+      this.weather.cleanup();
+      this.weather = null;
+    }
+    if (this.multiplayer) {
+      this.multiplayer.isMultiplayer = false;
+    }
+    const mpIndicator = document.getElementById('mp-hud-indicator');
+    if (mpIndicator) mpIndicator.classList.add('hidden');
+
     this.gameState = 'start';
     document.getElementById('hud').classList.add('hidden');
     document.getElementById('pause-screen').classList.add('hidden');
@@ -1549,10 +2528,15 @@ export class Engine {
     document.getElementById('start-screen').classList.remove('hidden');
     const watchHud = document.getElementById('smartwatch-hud');
     if (watchHud) watchHud.classList.add('hidden');
+    this.switchMenuView('root');
   }
 }
 
-// Instantiate engine when DOM is ready
-window.addEventListener('DOMContentLoaded', () => {
+// Bulletproof Engine instantiation (handles both pre-loaded and deferred module execution)
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', () => {
+    window.gameEngine = new Engine();
+  });
+} else {
   window.gameEngine = new Engine();
-});
+}
