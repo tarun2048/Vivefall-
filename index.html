@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vivefall - A 3D Voxel Adventure</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="icon" type="image/png" href="images/vivefall_logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <!-- Zero-Cost PeerJS WebRTC Signaling -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- Import map for Three.js -->
   <script type="importmap">
     {
@@ -26,30 +29,20 @@
   <div id="hud" class="hidden">
     <div id="crosshair">+</div>
     
-    <!-- Top Stats (Day/Time, Biome) -->
+    <!-- Top Stats (Day/Time, Biome, Multiplayer) -->
     <div id="top-stats">
       <div id="time-display">Day 1 - 08:00 (Morning)</div>
       <div id="biome-display">Biome: Plains</div>
+      <div id="mp-hud-indicator" class="mp-hud-pill hidden">
+        <span id="mp-hud-room">ROOM: VIVE-XXXX</span>
+        <span id="mp-hud-role" class="mp-role-tag">👑 MOD</span>
+      </div>
     </div>
 
     <!-- Boss Health Bar -->
     <div id="boss-bar-container" class="hidden">
       <div id="boss-bar-text">👹 DARK LORD - HP: 100 / 100</div>
       <div id="boss-bar-bg"><div id="boss-bar-fill"></div></div>
-    </div>
-
-    <!-- SmartWatch Story Quest Tracker -->
-    <div id="smartwatch-hud" class="hidden">
-      <div class="watch-header">⌚ SMARTWATCH QUEST TRACKER</div>
-      <div class="quest-title">Zuzu's Return Quest</div>
-      <ul id="quest-list">
-        <li id="quest-sleep" class="quest-item">💤 Sleep in a Bed</li>
-        <li id="quest-eat" class="quest-item">🍖 Eat Food</li>
-        <li id="quest-trade" class="quest-item">🤝 Trade with Villager</li>
-        <li id="quest-farm" class="quest-item">🌾 Farm / Plant Crops</li>
-        <li id="quest-defeat_mobs" class="quest-item">⚔️ Defeat a Mob</li>
-      </ul>
-      <div id="quest-status-footer">[0/5 Achievements Unlocked]</div>
     </div>
 
     <!-- Health, Hunger and Hotbar -->
@@ -80,6 +73,9 @@
     </div>
   </div>
 
+  <!-- Zuzu OS SmartWatch Root Container -->
+  <div id="smartwatch-hud"></div>
+
   <!-- Screen Overlays -->
   
   <!-- Cursor Item Tracker (for item dragging) -->
@@ -104,37 +100,294 @@
     </div>
   </div>
 
-  <!-- Start Screen -->
-  <div id="start-screen" class="overlay">
-    <div class="menu-box">
-      <div class="logo-container">
-        <img id="game-logo" src="images/vivefall_logo.png" alt="Vivefall Logo">
-      </div>
-      <p class="subtitle">Zuzu's Voxel Story Adventure</p>
-      
-      <div class="form-group">
-        <label for="world-seed">World Seed (Optional):</label>
-        <input type="text" id="world-seed" placeholder="Random Seed..." maxlength="16">
+  <!-- Multiplayer Connecting & Sync Overlay -->
+  <div id="mp-connecting-overlay" class="overlay hidden" style="z-index: 99999; background: rgba(5, 10, 20, 0.88); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center;">
+    <div class="mp-connecting-box">
+      <div class="mp-connecting-spinner"></div>
+      <h3 class="mp-connecting-title">SYNCING REALM WITH HOST</h3>
+      <p id="mp-connecting-text" class="mp-connecting-desc">Connecting to host & synchronizing terrain seed...</p>
+      <button id="btn-cancel-mp-connect" class="menu-btn" style="margin-top: 15px; padding: 6px 18px; font-size: 14px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Enhanced Main Menu Screen -->
+  <div id="start-screen" class="overlay menu-background">
+    <!-- Dark Vignette & Ambient Particles Backdrop -->
+    <div class="menu-backdrop-overlay"></div>
+    
+    <div class="main-menu-container">
+      <!-- Header Banner & Logo -->
+      <div class="main-menu-header">
+        <div class="logo-wrapper">
+          <img id="game-logo" src="images/vivefall_logo.png" alt="Vivefall Logo">
+        </div>
+        <div class="menu-tagline">EXPLORE • SURVIVE • BUILD • DISCOVER</div>
       </div>
 
-      <div class="mode-select">
-        <button id="btn-story" class="menu-btn active">📖 Story Mode</button>
-        <button id="btn-creative" class="menu-btn">🎨 Creative Mode</button>
+      <!-- Content Views Stack -->
+      <div class="menu-content-card">
+        
+        <!-- View 1: Root Main Menu (PLAY, MULTIPLAYER, SETTINGS) -->
+        <div id="menu-view-root" class="menu-view">
+          <button id="btn-menu-play" class="custom-card-btn primary-glow">
+            <div class="btn-icon">⚔️</div>
+            <div class="btn-text">
+              <span class="btn-title">PLAY</span>
+              <span class="btn-sub">Singleplayer Adventure</span>
+            </div>
+            <div class="btn-gem">◆</div>
+          </button>
+
+          <button id="btn-menu-multiplayer" class="custom-card-btn mp-glow">
+            <div class="btn-icon">🌐</div>
+            <div class="btn-text">
+              <span class="btn-title">MULTIPLAYER</span>
+              <span class="btn-sub">Host or join shared worlds</span>
+            </div>
+            <div class="btn-gem">👑</div>
+          </button>
+
+          <button id="btn-menu-settings" class="custom-card-btn">
+            <div class="btn-icon">⚙️</div>
+            <div class="btn-text">
+              <span class="btn-title">SETTINGS</span>
+              <span class="btn-sub">Adjust your experience</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- View 2: Play Menu (Create New World & Saved Worlds) -->
+        <div id="menu-view-play" class="menu-view hidden">
+          <div class="view-header-bar">
+            <h3>SELECT ADVENTURE</h3>
+          </div>
+
+          <button id="btn-open-create-world" class="custom-card-btn primary-glow">
+            <div class="btn-icon">➕</div>
+            <div class="btn-text">
+              <span class="btn-title">CREATE NEW WORLD</span>
+              <span class="btn-sub">Start a fresh voxel adventure</span>
+            </div>
+            <div class="btn-gem">◆</div>
+          </button>
+
+          <div class="section-divider">
+            <span>SAVED WORLDS</span>
+          </div>
+
+          <!-- Saved Worlds List Container -->
+          <div id="saved-worlds-list" class="worlds-scroll-list">
+            <!-- Populated dynamically in script -->
+          </div>
+
+          <button id="btn-play-back" class="custom-card-btn back-btn">
+            <div class="btn-icon">↩️</div>
+            <div class="btn-text">
+              <span class="btn-title">BACK TO MAIN MENU</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- View 3: World Creation Menu -->
+        <div id="menu-view-create" class="menu-view hidden">
+          <div class="view-header-bar">
+            <h3>CREATE NEW WORLD</h3>
+          </div>
+
+          <div class="custom-form-group">
+            <label for="world-name-input">World Name</label>
+            <input type="text" id="world-name-input" value="My Voxel World" placeholder="Enter world name...">
+          </div>
+
+          <div class="custom-form-group">
+            <label for="world-seed">World Seed (Optional)</label>
+            <div class="seed-input-row">
+              <input type="text" id="world-seed" placeholder="Random Seed..." maxlength="16">
+              <button id="btn-seed-random" class="small-action-btn">🎲 Random</button>
+            </div>
+          </div>
+
+          <div class="custom-form-group">
+            <div class="form-group-label">Select Game Mode</div>
+            <div class="mode-cards-grid">
+              <div id="mode-card-story" class="mode-card active" data-mode="story">
+                <div class="mode-icon">📖</div>
+                <div class="mode-info">
+                  <div class="mode-title">STORY MODE</div>
+                  <div class="mode-desc">Survival adventure, hunger decay, mob battles, quest tracker & Dark Castle boss.</div>
+                </div>
+              </div>
+              
+              <div id="mode-card-creative" class="mode-card" data-mode="creative">
+                <div class="mode-icon">🎨</div>
+                <div class="mode-info">
+                  <div class="mode-title">CREATIVE MODE</div>
+                  <div class="mode-desc">Unlimited blocks, flying capability, peaceful building sandbox.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-play-create-start" class="custom-card-btn primary-glow">
+            <div class="btn-icon">🚀</div>
+            <div class="btn-text">
+              <span class="btn-title">LAUNCH WORLD</span>
+              <span class="btn-sub">Generate and enter voxel world</span>
+            </div>
+            <div class="btn-gem">◆</div>
+          </button>
+
+          <button id="btn-create-back" class="custom-card-btn back-btn">
+            <div class="btn-icon">↩️</div>
+            <div class="btn-text">
+              <span class="btn-title">BACK</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- View: Multiplayer Menu (Host, Join, Saved Worlds) -->
+        <div id="menu-view-multiplayer" class="menu-view hidden">
+          <div class="view-header-bar">
+            <h3>MULTIPLAYER REALMS</h3>
+          </div>
+
+          <!-- Tab Selection (Host World / Join by Code / Saved Worlds) -->
+          <div class="mp-tabs-bar">
+            <button id="mp-tab-btn-host" class="mp-tab-btn active" data-mptab="host">👑 Host World</button>
+            <button id="mp-tab-btn-join" class="mp-tab-btn" data-mptab="join">🔗 Join by Code</button>
+            <button id="mp-tab-btn-saved" class="mp-tab-btn" data-mptab="saved">💾 Saved Worlds</button>
+          </div>
+
+          <!-- Section 1: Host World -->
+          <div id="mp-panel-host" class="mp-tab-panel">
+            <div class="custom-form-group">
+              <label for="mp-host-world-name">Realm Name</label>
+              <input type="text" id="mp-host-world-name" value="Zuzu's Shared Realm" placeholder="Enter realm name...">
+            </div>
+
+            <div class="custom-form-group">
+              <label for="mp-host-nickname">Your Player Name (Moderator)</label>
+              <input type="text" id="mp-host-nickname" value="Zuzu_Host" placeholder="Your username...">
+            </div>
+
+            <div class="custom-form-group">
+              <label for="mp-host-seed">World Seed (Optional)</label>
+              <div class="seed-input-row">
+                <input type="text" id="mp-host-seed" placeholder="Random Seed..." maxlength="16">
+                <button id="btn-mp-seed-random" class="small-action-btn">🎲 Random</button>
+              </div>
+            </div>
+
+            <div class="custom-form-group">
+              <div class="form-group-label">Select Game Mode</div>
+              <div class="mode-cards-grid">
+                <div id="mp-mode-card-story" class="mode-card active" data-mode="story">
+                  <div class="mode-icon">📖</div>
+                  <div class="mode-info">
+                    <div class="mode-title">STORY MODE</div>
+                    <div class="mode-desc">Co-op survival, mob battles & Dark Castle boss quest.</div>
+                  </div>
+                </div>
+                
+                <div id="mp-mode-card-creative" class="mode-card" data-mode="creative">
+                  <div class="mode-icon">🎨</div>
+                  <div class="mode-info">
+                    <div class="mode-title">CREATIVE MODE</div>
+                    <div class="mode-desc">Free flight, unlimited blocks & sandbox collaboration.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button id="btn-mp-host-launch" class="custom-card-btn primary-glow">
+              <div class="btn-icon">👑</div>
+              <div class="btn-text">
+                <span class="btn-title">HOST NEW WORLD</span>
+                <span class="btn-sub">Generate world & become Moderator</span>
+              </div>
+              <div class="btn-gem">◆</div>
+            </button>
+          </div>
+
+          <!-- Section 2: Join by Code -->
+          <div id="mp-panel-join" class="mp-tab-panel hidden">
+            <div class="custom-form-group">
+              <label for="mp-join-code">Room Code (e.g. VIVE-XXXX)</label>
+              <input type="text" id="mp-join-code" placeholder="e.g. VIVE-7A9B" maxlength="12" style="text-transform: uppercase; font-family: monospace; font-size: 1.2rem; letter-spacing: 2px;">
+            </div>
+
+            <div class="custom-form-group">
+              <label for="mp-join-nickname">Your Player Name</label>
+              <input type="text" id="mp-join-nickname" value="Zuzu_Guest" placeholder="Enter your name...">
+            </div>
+
+            <div class="mp-notice-box">
+              <span>💡 Offline Sync: World edits by players are recorded and synced whenever anyone rejoins!</span>
+            </div>
+
+            <button id="btn-mp-join-launch" class="custom-card-btn primary-glow">
+              <div class="btn-icon">🚀</div>
+              <div class="btn-text">
+                <span class="btn-title">CONNECT TO REALM</span>
+                <span class="btn-sub">Sync latest world state and enter</span>
+              </div>
+              <div class="btn-gem">◆</div>
+            </button>
+          </div>
+
+          <!-- Section 3: Saved Multiplayer Worlds -->
+          <div id="mp-panel-saved" class="mp-tab-panel hidden">
+            <div id="mp-saved-worlds-list" class="worlds-scroll-list">
+              <!-- Populated dynamically -->
+              <div class="empty-worlds-msg">No saved multiplayer worlds yet. Host or join one!</div>
+            </div>
+          </div>
+
+          <button id="btn-multiplayer-back" class="custom-card-btn back-btn">
+            <div class="btn-icon">↩️</div>
+            <div class="btn-text">
+              <span class="btn-title">BACK TO MAIN MENU</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- View 4: Settings Menu -->
+        <div id="menu-view-settings" class="menu-view hidden">
+          <div class="view-header-bar">
+            <h3>SETTINGS & CONTROLS</h3>
+          </div>
+
+          <div class="custom-form-group">
+            <label for="setting-render-distance">Render Distance: <span id="val-render-distance">4 Chunks</span></label>
+            <input type="range" id="setting-render-distance" min="2" max="8" value="4">
+          </div>
+
+          <div class="custom-form-group">
+            <div class="controls-cheat-card">
+              <h4>GAME CONTROLS</h4>
+              <p><strong>WASD</strong>: Move | <strong>Mouse</strong>: Look Camera</p>
+              <p><strong>Left Click</strong>: Break Block / Attack</p>
+              <p><strong>Right Click</strong>: Place Block / Open Chest / Trade</p>
+              <p><strong>Space</strong>: Jump / Fly Up (Double tap in Creative)</p>
+              <p><strong>Shift</strong>: Sneak / Fly Down | <strong>E</strong>: Inventory</p>
+              <p><strong>1-9</strong>: Hotbar Slot | <strong>Esc</strong>: Pause Menu</p>
+            </div>
+          </div>
+
+          <button id="btn-settings-back" class="custom-card-btn back-btn">
+            <div class="btn-icon">↩️</div>
+            <div class="btn-text">
+              <span class="btn-title">BACK TO MAIN MENU</span>
+            </div>
+          </button>
+        </div>
+
       </div>
 
-      <button id="btn-play" class="menu-btn primary-btn">PLAY STORY MODE</button>
-      <button id="btn-load" class="menu-btn disabled" disabled>LOAD SAVED WORLD</button>
-      <button id="btn-export-db" class="menu-btn">EXPORT WORLD (.db)</button>
-      <button id="btn-import-db" class="menu-btn">IMPORT WORLD (.db)</button>
-      <input type="file" id="file-import-world" accept=".db,.json" class="hidden">
-
-      <div class="controls-guide">
-        <h3>Controls:</h3>
-        <p><strong>WASD</strong>: Move | <strong>Mouse</strong>: Look | <strong>Left Click</strong>: Break Block</p>
-        <p><strong>Right Click</strong>: Place Block / Interact (Chest, Villager, Crafting)</p>
-        <p><strong>Space</strong>: Jump / Fly Up (Double tap in Creative) | <strong>Shift</strong>: Sneak / Fly Down</p>
-        <p><strong>E</strong>: Open Inventory / Close UI | <strong>1-9</strong>: Select Hotbar Slot</p>
-        <p><strong>Esc</strong>: Pause Menu</p>
+      <!-- Footer Metadata -->
+      <div class="main-menu-footer">
+        <div class="footer-left">VIVEFALL v0.3.0 • A world of endless possibilities.</div>
+        <div class="footer-right">CREATED BY TARUN</div>
       </div>
     </div>
   </div>
@@ -183,8 +436,10 @@
               <div class="slot armor-slot" data-slot="armor-feet" title="Boots"></div>
             </div>
             
-            <div class="player-preview-box">
-              <div id="player-preview-canvas-placeholder">3D Player Preview</div>
+            <div class="player-preview-box" id="player-preview-container">
+              <canvas id="player-preview-canvas" width="220" height="240"></canvas>
+              <div class="player-preview-badge">ZUZU</div>
+              <div class="player-preview-hint">Drag to Rotate</div>
             </div>
 
             <div class="crafting-2x2-box">
@@ -324,7 +579,7 @@
   </div>
 
   <!-- Background Music/Sound effect tags can go here (using audio synthesis or silence as fallback) -->
-  <script type="module" src="js/simplex-noise.js"></script>
-  <script type="module" src="js/engine.js"></script>
+  <script type="module" src="js/simplex-noise.js?v=4"></script>
+  <script type="module" src="js/engine.js?v=4"></script>
 </body>
 </html>
