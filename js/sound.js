@@ -199,4 +199,137 @@ export class SoundManager {
     osc.start(time);
     osc.stop(time + 0.2);
   }
+
+  playClick() {
+    this.initContext();
+    if (!this.ctx) return;
+    const time = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1200, time);
+    osc.frequency.exponentialRampToValueAtTime(600, time + 0.04);
+    gain.gain.setValueAtTime(0.1, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.04);
+  }
+
+  playFuse() {
+    this.initContext();
+    if (!this.ctx) return;
+    const time = this.ctx.currentTime;
+
+    // Hissing fuse noise
+    const bufferSize = this.ctx.sampleRate * 0.3;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 3000;
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.08, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start(time);
+    noise.stop(time + 0.3);
+  }
+
+  playExplosion() {
+    this.initContext();
+    if (!this.ctx) return;
+    const time = this.ctx.currentTime;
+
+    // Deep boom
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(80, time);
+    osc.frequency.exponentialRampToValueAtTime(20, time + 0.4);
+    gain.gain.setValueAtTime(0.3, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.4);
+
+    // Debris noise burst
+    const bufferSize = this.ctx.sampleRate * 0.35;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.2, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.35);
+
+    noise.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+    noise.start(time);
+    noise.stop(time + 0.35);
+  }
+
+  startRainSound() {
+    this.initContext();
+    if (!this.ctx || this.rainSource) return;
+
+    try {
+      const bufferSize = this.ctx.sampleRate * 2; // 2-second loop
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      this.rainSource = this.ctx.createBufferSource();
+      this.rainSource.buffer = buffer;
+      this.rainSource.loop = true;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 1100;
+
+      this.rainGain = this.ctx.createGain();
+      this.rainGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+      this.rainGain.gain.linearRampToValueAtTime(0.045, this.ctx.currentTime + 1.5);
+
+      this.rainSource.connect(filter);
+      filter.connect(this.rainGain);
+      this.rainGain.connect(this.ctx.destination);
+
+      this.rainSource.start();
+    } catch (e) {
+      console.warn('Audio context rain start skipped:', e);
+    }
+  }
+
+  stopRainSound() {
+    if (this.rainGain && this.ctx) {
+      this.rainGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 1.0);
+      setTimeout(() => {
+        if (this.rainSource) {
+          try { this.rainSource.stop(); } catch (e) {}
+          this.rainSource = null;
+          this.rainGain = null;
+        }
+      }, 1100);
+    }
+  }
 }
