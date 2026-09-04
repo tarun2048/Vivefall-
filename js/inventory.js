@@ -1,4 +1,6 @@
-import { BLOCK } from './world.js';
+import * as THREE from 'three';
+import { BLOCK } from './world.js?v=2';
+import { ZuzuCharacterModel } from './zuzu_model.js?v=2';
 
 // SVG icons for all items/blocks
 export const ITEM_SVGS = {
@@ -47,9 +49,14 @@ export const ITEM_SVGS = {
   arrow: `<svg viewBox="0 0 16 16"><line x1="2" y1="14" x2="11" y2="5" stroke="#8b5a2b" stroke-width="2"/><path fill="#eaeaea" d="M11 5l3-3l-1 4z"/><path fill="#999" d="M2 14l-1 1l1-2z"/></svg>`,
   string: `<svg viewBox="0 0 16 16"><path fill="none" stroke="#eaeaea" stroke-width="1.5" d="M2 2c4 4-2 8 6 6s8-4 6 6"/></svg>`,
   tnt: `<svg viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" fill="#d32f2f"/><rect x="0" y="5" width="16" height="6" fill="#ffffff"/><text x="8" y="10" font-size="5" font-family="sans-serif" font-weight="bold" fill="#000" text-anchor="middle">TNT</text></svg>`,
-  redstone_wire: `<svg viewBox="0 0 16 16"><path fill="none" stroke="#ff2222" stroke-width="3" d="M1 8h14M8 1v14"/><circle cx="8" cy="8" r="3" fill="#ff5555"/></svg>`,
-  lever: `<svg viewBox="0 0 16 16"><rect x="4" y="11" width="8" height="4" fill="#757575"/><line x1="8" y1="11" x2="12" y2="3" stroke="#8b5a2b" stroke-width="2.5"/><circle cx="12" cy="3" r="1.5" fill="#333333"/></svg>`,
-  button: `<svg viewBox="0 0 16 16"><rect x="4" y="5" width="8" height="6" fill="#999999" stroke="#555555" stroke-width="1"/></svg>`,
+  copper_wire: `<svg viewBox="0 0 16 16"><path fill="none" stroke="#d97706" stroke-width="3" stroke-linecap="round" d="M1 8h14M8 1v14"/><circle cx="8" cy="8" r="3" fill="#f59e0b" stroke="#fef08a" stroke-width="1"/><circle cx="8" cy="8" r="1" fill="#ffffff"/></svg>`,
+  redstone_wire: `<svg viewBox="0 0 16 16"><path fill="none" stroke="#d97706" stroke-width="3" stroke-linecap="round" d="M1 8h14M8 1v14"/><circle cx="8" cy="8" r="3" fill="#f59e0b" stroke="#fef08a" stroke-width="1"/><circle cx="8" cy="8" r="1" fill="#ffffff"/></svg>`,
+  lever: `<svg viewBox="0 0 16 16"><rect x="3" y="10" width="10" height="5" rx="1" fill="#475569" stroke="#1e293b" stroke-width="1"/><line x1="8" y1="11" x2="13" y2="3" stroke="#8b5a2b" stroke-width="2.5" stroke-linecap="round"/><circle cx="13" cy="3" r="2" fill="#f97316"/></svg>`,
+  button: `<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="2" fill="#334155" stroke="#1e293b" stroke-width="1"/><rect x="4" y="5" width="8" height="6" rx="1" fill="#64748b" stroke="#94a3b8" stroke-width="1"/></svg>`,
+  lantern: `<svg viewBox="0 0 16 16"><rect x="3" y="14" width="10" height="2" fill="#1e293b"/><rect x="3" y="5" width="10" height="2" fill="#334155"/><rect x="4" y="3" width="8" height="2" fill="#475569"/><rect x="6" y="1" width="4" height="2" fill="none" stroke="#64748b" stroke-width="1.5"/><rect x="3" y="7" width="2" height="7" fill="#1e293b"/><rect x="11" y="7" width="2" height="7" fill="#1e293b"/><rect x="5" y="7" width="6" height="7" fill="#ea580c"/><rect x="6" y="8" width="4" height="5" fill="#fde047"/><rect x="7" y="9" width="2" height="3" fill="#ffffff"/></svg>`,
+  lantern_on: `<svg viewBox="0 0 16 16"><rect x="3" y="14" width="10" height="2" fill="#1e293b"/><rect x="3" y="5" width="10" height="2" fill="#334155"/><rect x="4" y="3" width="8" height="2" fill="#475569"/><rect x="6" y="1" width="4" height="2" fill="none" stroke="#64748b" stroke-width="1.5"/><rect x="3" y="7" width="2" height="7" fill="#1e293b"/><rect x="11" y="7" width="2" height="7" fill="#1e293b"/><rect x="5" y="7" width="6" height="7" fill="#ea580c"/><rect x="6" y="8" width="4" height="5" fill="#fde047"/><rect x="7" y="9" width="2" height="3" fill="#ffffff"/></svg>`,
+  glow_block: `<svg viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" fill="#0d9488"/><rect x="2" y="2" width="12" height="12" fill="#f0fdfa"/><rect x="3" y="3" width="10" height="10" fill="#ffffff"/><path fill="#5eead4" d="M2 2h3v3H2zm9 0h3v3h-3zM2 11h3v3H2zm9 0h3v3h-3z"/></svg>`,
+  glow_block_on: `<svg viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" fill="#0d9488"/><rect x="2" y="2" width="12" height="12" fill="#f0fdfa"/><rect x="3" y="3" width="10" height="10" fill="#ffffff"/><path fill="#5eead4" d="M2 2h3v3H2zm9 0h3v3h-3zM2 11h3v3H2zm9 0h3v3h-3z"/></svg>`,
   spawn_egg_zombie: `<svg viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="5" ry="6" fill="#17c43d"/><circle cx="6" cy="7" r="1" fill="#003300"/><circle cx="10" cy="11" r="1" fill="#003300"/></svg>`,
   spawn_egg_skeleton: `<svg viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="5" ry="6" fill="#dddddd"/><circle cx="6" cy="7" r="1" fill="#444444"/><circle cx="10" cy="11" r="1" fill="#444444"/></svg>`,
   spawn_egg_spider: `<svg viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="5" ry="6" fill="#1f1f1f"/><circle cx="6" cy="7" r="1" fill="#ee2222"/><circle cx="10" cy="11" r="1" fill="#ee2222"/></svg>`,
@@ -57,7 +64,17 @@ export const ITEM_SVGS = {
   spawn_egg_sheep: `<svg viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="5" ry="6" fill="#ffffff"/><circle cx="6" cy="7" r="1" fill="#e5c19e"/><circle cx="10" cy="11" r="1" fill="#e5c19e"/></svg>`,
   spawn_egg_chicken: `<svg viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="5" ry="6" fill="#ffffea"/><circle cx="6" cy="7" r="1" fill="#ffaa00"/><circle cx="10" cy="11" r="1" fill="#ff2222"/></svg>`,
   wool: `<svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="3" fill="#fafafa" stroke="#d0d0d0" stroke-width="1.5"/><circle cx="5" cy="5" r="2" fill="#eaeaea"/><circle cx="11" cy="11" r="2" fill="#eaeaea"/></svg>`,
-  mystic_book: `<svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2" fill="#4a154b" stroke="#ffd700" stroke-width="1.5"/><rect x="4" y="3" width="8" height="10" fill="#fff8e7"/><circle cx="8" cy="8" r="2.5" fill="#ff0055"/><path fill="#ffd700" d="M6 6h4v4H6z"/></svg>`
+  mystic_book: `<svg viewBox="0 0 16 16"><rect x="2" y="1" width="12" height="14" rx="2" fill="#4a154b" stroke="#ffd700" stroke-width="1.5"/><rect x="4" y="3" width="8" height="10" fill="#fff8e7"/><circle cx="8" cy="8" r="2.5" fill="#ff0055"/><path fill="#ffd700" d="M6 6h4v4H6z"/></svg>`,
+  
+  // Biome Block Items
+  snow_grass: `<svg viewBox="0 0 16 16"><path fill="#f5f7fa" d="M1 1h14v5H1z"/><path fill="#866043" d="M1 6h14v9H1z"/><path fill="#ffffff" d="M3 5h2v3H3zm8 0h3v2h-3z"/></svg>`,
+  snow_block: `<svg viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" fill="#f0f4f8"/><rect x="2" y="2" width="4" height="4" fill="#ffffff"/><rect x="10" y="10" width="4" height="4" fill="#d9e2ec"/></svg>`,
+  ice: `<svg viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" fill="#a0c8f0"/><line x1="2" y1="14" x2="14" y2="2" stroke="#ffffff" stroke-width="2"/><line x1="6" y1="14" x2="14" y2="6" stroke="#ffffff" stroke-width="1"/></svg>`,
+  pine_log: `<svg viewBox="0 0 16 16"><path fill="#3b2518" d="M0 0h16v16H0z"/><path fill="#9c7a59" d="M4 4h8v8H4z"/></svg>`,
+  pine_leaves: `<svg viewBox="0 0 16 16"><path fill="#1a402b" d="M0 0h16v16H0z"/><path fill="#2d6a48" d="M2 1h3v2H2zm8 8h3v3h-3z"/></svg>`,
+  jungle_log: `<svg viewBox="0 0 16 16"><path fill="#594127" d="M0 0h16v16H0z"/><path fill="#b58d59" d="M4 4h8v8H4z"/></svg>`,
+  jungle_leaves: `<svg viewBox="0 0 16 16"><path fill="#125916" d="M0 0h16v16H0z"/><path fill="#248a2b" d="M2 1h3v2H2zm8 8h3v3h-3z"/></svg>`,
+  mossy_cobblestone: `<svg viewBox="0 0 16 16"><path fill="#757575" d="M0 0h16v16H0z"/><path fill="#3a3a3a" d="M0 0h16v2H0zm0 6h16v2H0zm0 6h16v2H0z"/><path fill="#2d6a2e" d="M2 2h4v3H2zm7 7h5v3H9z"/></svg>`
 };
 
 export const ITEM_DEFS = {
@@ -103,9 +120,11 @@ export const ITEM_DEFS = {
   arrow: { name: 'Arrow', maxStack: 64 },
   string: { name: 'String', maxStack: 64 },
   tnt: { name: 'TNT', maxStack: 64 },
-  redstone_wire: { name: 'Redstone Dust', maxStack: 64 },
+  copper_wire: { name: 'Copper Wire', maxStack: 64 },
   lever: { name: 'Lever', maxStack: 64 },
   button: { name: 'Button', maxStack: 64 },
+  lantern: { name: 'Lantern', maxStack: 64 },
+  glow_block: { name: 'Glowing Block', maxStack: 64 },
   spawn_egg_zombie: { name: 'Zombie Spawn Egg', maxStack: 64 },
   spawn_egg_skeleton: { name: 'Skeleton Spawn Egg', maxStack: 64 },
   spawn_egg_spider: { name: 'Spider Spawn Egg', maxStack: 64 },
@@ -113,7 +132,16 @@ export const ITEM_DEFS = {
   spawn_egg_sheep: { name: 'Sheep Spawn Egg', maxStack: 64 },
   spawn_egg_chicken: { name: 'Chicken Spawn Egg', maxStack: 64 },
   wool: { name: 'White Wool', maxStack: 64 },
-  mystic_book: { name: 'Mystic Book of Return', maxStack: 1 }
+  mystic_book: { name: 'Mystic Book of Return', maxStack: 1 },
+  
+  snow_grass: { name: 'Snow Grass Block', maxStack: 64 },
+  snow_block: { name: 'Snow Block', maxStack: 64 },
+  ice: { name: 'Ice', maxStack: 64 },
+  pine_log: { name: 'Pine Log', maxStack: 64 },
+  pine_leaves: { name: 'Pine Leaves', maxStack: 64 },
+  jungle_log: { name: 'Jungle Log', maxStack: 64 },
+  jungle_leaves: { name: 'Jungle Leaves', maxStack: 64 },
+  mossy_cobblestone: { name: 'Mossy Cobblestone', maxStack: 64 }
 };
 
 export class InventoryManager {
@@ -143,16 +171,20 @@ export class InventoryManager {
     // Dragged item state (cursor tracker)
     this.cursorItem = null; // { id, count }
 
+    // Armor slots state
+    this.armor = { head: null, chest: null, legs: null, feet: null };
+
     if (this.engine.gameMode === 'creative') {
       this.initCreativeHotbar();
     }
     this.initInventoryUIEvents();
+    this.initPlayerPreview();
   }
 
   // Gives player default block items in Creative mode
   initCreativeHotbar() {
     const defaultBlocks = [
-      'grass_block', 'dirt', 'stone', 'wood_log', 'leaves', 'sand', 'glass', 'crafting_table', 'chest'
+      'grass_block', 'stone', 'wooden_planks', 'tnt', 'copper_wire', 'lever', 'button', 'lantern', 'glow_block'
     ];
     for (let i = 0; i < 9; i++) {
       this.hotbar[i] = { id: defaultBlocks[i], count: 64 };
@@ -161,6 +193,9 @@ export class InventoryManager {
 
   // Bind mouse clicks to UI grid slots
   initInventoryUIEvents() {
+    if (window._inventoryEventsInitialized) return;
+    window._inventoryEventsInitialized = true;
+
     // Single delegated click handler for UI grid interactions
     document.getElementById('ui-screen').addEventListener('mousedown', (e) => {
       const slotElement = e.target.closest('.slot');
@@ -216,6 +251,161 @@ export class InventoryManager {
     document.getElementById('btn-trade-execute').addEventListener('click', () => {
       this.executeActiveTrade();
     });
+  }
+
+  // Initialize polished 3D character preview for Zuzu
+  initPlayerPreview() {
+    const canvas = document.getElementById('player-preview-canvas');
+    const container = document.getElementById('player-preview-container');
+    if (!canvas || !container) return;
+
+    // 1. Three.js Scene & Camera setup
+    this.previewScene = new THREE.Scene();
+    
+    const aspect = (canvas.clientWidth || 220) / (canvas.clientHeight || 240);
+    this.previewCamera = new THREE.PerspectiveCamera(38, aspect, 0.1, 100);
+    this.previewCamera.position.set(0, 0.0, 3.4);
+    this.previewCamera.lookAt(0, 0.0, 0);
+
+    // 2. High-performance WebGLRenderer with Film Tone Mapping
+    this.previewRenderer = new THREE.WebGLRenderer({
+      canvas: canvas,
+      alpha: true,
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+    this.previewRenderer.setSize(canvas.clientWidth || 220, canvas.clientHeight || 240, false);
+    this.previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.previewRenderer.shadowMap.enabled = true;
+    this.previewRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.previewRenderer.toneMappingExposure = 1.0;
+    this.previewRenderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    // 3. Balanced Studio Lighting (prevents washed-out highlights, keeps rich colors)
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.55);
+    this.previewScene.add(ambLight);
+
+    // Warm key light
+    const keyLight = new THREE.DirectionalLight(0xfffaed, 0.85);
+    keyLight.position.set(2.0, 2.5, 3.0);
+    keyLight.castShadow = true;
+    this.previewScene.add(keyLight);
+
+    // Cool fill light
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.35);
+    fillLight.position.set(-2.0, 1.2, 2.2);
+    this.previewScene.add(fillLight);
+
+    // Warm rim light
+    const rimLight = new THREE.DirectionalLight(0xfef08a, 0.55);
+    rimLight.position.set(0, 2.2, -2.5);
+    this.previewScene.add(rimLight);
+
+    // 4. Instantiate Zuzu 3D Model centered to show full body from hair to sneakers
+    this.zuzuPreviewModel = new ZuzuCharacterModel({
+      isInventoryPreview: true,
+      scale: 0.95
+    });
+    this.zuzuPreviewModel.mesh.position.set(0, -0.90, 0);
+    this.previewScene.add(this.zuzuPreviewModel.mesh);
+
+    // 5. Interactive Drag to Rotate (with inertia and mouse look)
+    this.previewRotation = {
+      isDragging: false,
+      startX: 0,
+      currentYaw: 0.35, // Three-quarter hero pose
+      targetYaw: 0.35,
+      autoRotateSpeed: 0.003
+    };
+
+    container.addEventListener('mousedown', (e) => {
+      this.previewRotation.isDragging = true;
+      this.previewRotation.startX = e.clientX;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (this.previewRotation.isDragging) {
+        const deltaX = e.clientX - this.previewRotation.startX;
+        this.previewRotation.targetYaw += deltaX * 0.015;
+        this.previewRotation.startX = e.clientX;
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      this.previewRotation.isDragging = false;
+    });
+
+    // Touch support for dragging preview
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 0) {
+        this.previewRotation.isDragging = true;
+        this.previewRotation.startX = e.touches[0].clientX;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchmove', (e) => {
+      if (this.previewRotation.isDragging && e.touches.length > 0) {
+        const deltaX = e.touches[0].clientX - this.previewRotation.startX;
+        this.previewRotation.targetYaw += deltaX * 0.015;
+        this.previewRotation.startX = e.touches[0].clientX;
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => {
+      this.previewRotation.isDragging = false;
+    });
+
+    // Start preview loop
+    this.startPreviewLoop();
+  }
+
+  // Animation & Rendering loop for Zuzu Preview
+  startPreviewLoop() {
+    if (this._previewLoopRunning) return;
+    this._previewLoopRunning = true;
+
+    let lastTime = performance.now();
+
+    const loop = (time) => {
+      requestAnimationFrame(loop);
+
+      // Only process when inventory panel is open
+      const inventoryScreen = document.getElementById('screen-inventory');
+      if (!inventoryScreen || inventoryScreen.classList.contains('hidden') || this.engine.gameState !== 'inventory') {
+        return;
+      }
+
+      const delta = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+
+      // Handle gentle auto-rotation and interactive drag damping
+      if (!this.previewRotation.isDragging) {
+        this.previewRotation.targetYaw += this.previewRotation.autoRotateSpeed;
+      }
+      this.previewRotation.currentYaw += (this.previewRotation.targetYaw - this.previewRotation.currentYaw) * 0.15;
+      
+      if (this.zuzuPreviewModel) {
+        this.zuzuPreviewModel.mesh.rotation.y = this.previewRotation.currentYaw;
+        this.zuzuPreviewModel.update(delta, time / 1000, 0, false, false, false);
+      }
+
+      // Dynamic Canvas Size Match
+      const canvas = document.getElementById('player-preview-canvas');
+      if (canvas && (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight)) {
+        if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+          this.previewRenderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+          this.previewCamera.aspect = canvas.clientWidth / canvas.clientHeight;
+          this.previewCamera.updateProjectionMatrix();
+        }
+      }
+
+      if (this.previewRenderer && this.previewScene && this.previewCamera) {
+        this.previewRenderer.render(this.previewScene, this.previewCamera);
+      }
+    };
+
+    requestAnimationFrame(loop);
   }
 
   // Add item to inventory (returns remaining count)
@@ -425,6 +615,10 @@ export class InventoryManager {
     if (slotType === 'trade-out') {
       return { container: this, index: 'tradeOut' };
     }
+    if (slotType.startsWith('armor-')) {
+      const part = slotType.replace('armor-', '');
+      return { container: this.armor, index: part };
+    }
     return null;
   }
 
@@ -478,13 +672,18 @@ export class InventoryManager {
       }
     }
 
-    // 5. Cooking raw meat with torch
-    if (!result && nonNullCount === 2) {
-      const hasTorch = nonNullItems.includes('torch');
-      if (hasTorch) {
-        if (nonNullItems.includes('raw_beef')) result = { id: 'cooked_beef', count: 1 };
-        else if (nonNullItems.includes('raw_mutton')) result = { id: 'cooked_mutton', count: 1 };
-        else if (nonNullItems.includes('raw_chicken')) result = { id: 'cooked_chicken', count: 1 };
+    // 6. Copper Wire / Button / Lever 2x2 recipes
+    if (!result) {
+      if (nonNullCount === 1) {
+        if (nonNullItems[0] === 'wooden_planks' || nonNullItems[0] === 'stone') result = { id: 'button', count: 1 };
+        else if (nonNullItems[0] === 'iron_ingot' || nonNullItems[0] === 'cobblestone') result = { id: 'copper_wire', count: 4 };
+      } else if (nonNullCount === 2) {
+        if ((items[0] === 'stick' && items[2] === 'cobblestone') ||
+            (items[1] === 'stick' && items[3] === 'cobblestone') ||
+            (items[0] === 'stick' && items[2] === 'stone') ||
+            (items[1] === 'stick' && items[3] === 'stone')) {
+          result = { id: 'lever', count: 1 };
+        }
       }
     }
 
@@ -574,13 +773,26 @@ export class InventoryManager {
       }
     }
 
-    // 9. Cooking recipes
-    if (!result && nonNullCount === 2) {
-      const hasTorch = nonNullItems.includes('torch');
-      if (hasTorch) {
-        if (nonNullItems.includes('raw_beef')) result = { id: 'cooked_beef', count: 1 };
-        else if (nonNullItems.includes('raw_mutton')) result = { id: 'cooked_mutton', count: 1 };
-        else if (nonNullItems.includes('raw_chicken')) result = { id: 'cooked_chicken', count: 1 };
+    // 9. TNT Recipe: 4 Sand + 5 Gunpowder/Rotten Flesh/Bone
+    if (!result) {
+      const sandCount = items.filter(i => i === 'sand').length;
+      if (sandCount >= 4 && nonNullCount >= 5) {
+        result = { id: 'tnt', count: 1 };
+      }
+    }
+
+    // 10. Lever / Button / Copper Wire 3x3 Fallbacks
+    if (!result) {
+      if (nonNullCount === 1) {
+        if (nonNullItems[0] === 'wooden_planks' || nonNullItems[0] === 'stone') result = { id: 'button', count: 1 };
+        else if (nonNullItems[0] === 'iron_ingot' || nonNullItems[0] === 'cobblestone') result = { id: 'copper_wire', count: 4 };
+      } else if (nonNullCount === 2) {
+        if ((items[1] === 'stick' && items[4] === 'cobblestone') ||
+            (items[4] === 'stick' && items[7] === 'cobblestone') ||
+            (items[1] === 'stick' && items[4] === 'stone') ||
+            (items[4] === 'stick' && items[7] === 'stone')) {
+          result = { id: 'lever', count: 1 };
+        }
       }
     }
 
@@ -841,6 +1053,33 @@ export class InventoryManager {
       
       const out = document.querySelector('.slot[data-slot="trade-out"]');
       out.innerHTML = this.tradeOut ? `<div class="item-icon">${ITEM_SVGS[this.tradeOut.id]}</div><span class="item-count">${this.tradeOut.count > 1 ? this.tradeOut.count : ''}</span>` : '';
+    }
+
+    // 8. Armor slots UI
+    if (this.armor) {
+      ['head', 'chest', 'legs', 'feet'].forEach(part => {
+        const slot = document.querySelector(`.slot[data-slot="armor-${part}"]`);
+        if (slot) {
+          const item = this.armor[part];
+          slot.innerHTML = item ? `
+            <div class="item-icon">${ITEM_SVGS[item.id] || ''}</div>
+            <span class="item-count">${item.count > 1 ? item.count : ''}</span>
+          ` : '';
+        }
+      });
+    }
+
+    // 9. Sync 3D Zuzu Preview Model with held item and armor
+    if (this.zuzuPreviewModel) {
+      const selectedIndex = this.engine.player?.selectedHotbarIndex ?? 0;
+      const held = this.hotbar[selectedIndex];
+      this.zuzuPreviewModel.setHeldItem(held ? held.id : null);
+
+      if (this.armor) {
+        ['head', 'chest', 'legs', 'feet'].forEach(part => {
+          this.zuzuPreviewModel.setArmor(part, this.armor[part]?.id || null);
+        });
+      }
     }
   }
 }
