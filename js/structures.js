@@ -31,7 +31,8 @@ export class Structures {
 
     const isVillageChunk = (cx === 1 && cz === 0) || ((Math.abs(cx) % 10 === 0) && (Math.abs(cz) % 10 === 0) && (cx !== 0 || cz !== 0));
 
-    if (isVillageChunk && biome === 'plains') {
+    const validVillageBiomes = ['plains', 'snow', 'forest', 'floral', 'cherry_blossom', 'jungle'];
+    if (isVillageChunk && validVillageBiomes.includes(biome)) {
       this.generateVillage(centerWX, centerWZ);
       return; // Skip standard tree spawning inside village area
     }
@@ -64,6 +65,24 @@ export class Structures {
           // Forest has medium density of trees (0.6% chance per column)
           if (chunkRandom() < 0.006) {
             this.generateTree(wx, groundY + 1, wz, chunkRandom);
+          }
+        } else if (cellBiome === 'snow') {
+          // Snow has pine trees (0.8% chance) and ice spikes (0.2% chance)
+          const rand = chunkRandom();
+          if (rand < 0.008) {
+            this.generatePineTree(wx, groundY + 1, wz, chunkRandom);
+          } else if (rand < 0.010) {
+            this.generateIceSpike(wx, groundY + 1, wz, chunkRandom);
+          }
+        } else if (cellBiome === 'mountains') {
+          // Mountains have pine trees on lower ledges (0.4% chance)
+          if (groundY < 44 && chunkRandom() < 0.004) {
+            this.generatePineTree(wx, groundY + 1, wz, chunkRandom);
+          }
+        } else if (cellBiome === 'jungle') {
+          // Jungle has high density giant jungle trees (1.5% chance)
+          if (chunkRandom() < 0.015) {
+            this.generateJungleTree(wx, groundY + 1, wz, chunkRandom);
           }
         } else if (cellBiome === 'plains') {
           // Plains has very low tree density (0.05% chance)
@@ -98,8 +117,8 @@ export class Structures {
     }
   }
 
-  // Helper to place a block safely (overwriting air, water, grass, dirt, sand, leaves) without rendering updates
-  placeRawBlock(x, y, z, blockId) {
+  // Helper to place a block safely (overwriting terrain/foliage) without rendering updates
+  placeRawBlock(x, y, z, blockId, force = false) {
     const world = this.engine.world;
     const cx = Math.floor(x / world.chunkSize);
     const cz = Math.floor(z / world.chunkSize);
@@ -112,10 +131,22 @@ export class Structures {
     const index = (lx * world.chunkSize + lz) * world.chunkHeight + y;
     
     const current = chunk[index];
-    if (current === BLOCK.AIR || current === BLOCK.WATER || 
+    if (force || current === BLOCK.AIR || current === BLOCK.WATER || 
         current === BLOCK.GRASS || current === BLOCK.DIRT || 
-        current === BLOCK.SAND || current === BLOCK.LEAVES) {
-      chunk[index] = blockId;
+        current === BLOCK.SAND || current === BLOCK.LEAVES ||
+        current === BLOCK.SNOW_GRASS || current === BLOCK.SNOW ||
+        current === BLOCK.ICE || current === BLOCK.MOSSY_COBBLE ||
+        current === BLOCK.PINE_LEAVES || current === BLOCK.JUNGLE_LEAVES) {
+      if (current !== blockId) {
+        chunk[index] = blockId;
+        if (world.dirtyChunks) {
+          world.dirtyChunks.add(`${cx},${cz}`);
+          if (lx === 0) world.dirtyChunks.add(`${cx - 1},${cz}`);
+          if (lx === world.chunkSize - 1) world.dirtyChunks.add(`${cx + 1},${cz}`);
+          if (lz === 0) world.dirtyChunks.add(`${cx},${cz - 1}`);
+          if (lz === world.chunkSize - 1) world.dirtyChunks.add(`${cx},${cz + 1}`);
+        }
+      }
     }
   }
 
@@ -177,6 +208,99 @@ export class Structures {
     }
   }
 
+  // Generates an authentic Minecraft-style Spruce / Pine Tree with snow caps
+  generatePineTree(x, y, z, randFunc) {
+    const trunkHeight = 6 + Math.floor(randFunc() * 3); // 6 to 8 blocks trunk
+    
+    // 1. Trunk (only up to trunkHeight, enclosed by leaves at top)
+    for (let h = 0; h < trunkHeight; h++) {
+      this.placeRawBlock(x, y + h, z, BLOCK.PINE_WOOD);
+    }
+
+    // 2. Top-most leaves single cap & snow cap
+    const topY = y + trunkHeight;
+    this.placeRawBlock(x, topY, z, BLOCK.PINE_LEAVES);
+    this.placeRawBlock(x, topY + 1, z, BLOCK.SNOW);
+
+    // 3. Tier 1 (near top): 3x3 cross leaves
+    const t1Y = topY - 1;
+    this.placeRawBlock(x + 1, t1Y, z, BLOCK.PINE_LEAVES);
+    this.placeRawBlock(x - 1, t1Y, z, BLOCK.PINE_LEAVES);
+    this.placeRawBlock(x, t1Y, z + 1, BLOCK.PINE_LEAVES);
+    this.placeRawBlock(x, t1Y, z - 1, BLOCK.PINE_LEAVES);
+
+    // 4. Tier 2: 3x3 full square leaves with snow caps
+    const t2Y = topY - 2;
+    for (let lx = -1; lx <= 1; lx++) {
+      for (let lz = -1; lz <= 1; lz++) {
+        if (lx === 0 && lz === 0) continue;
+        this.placeRawBlock(x + lx, t2Y, z + lz, BLOCK.PINE_LEAVES);
+        this.placeRawBlock(x + lx, t2Y + 1, z + lz, BLOCK.SNOW);
+      }
+    }
+
+    // 5. Tier 3: 5x5 diamond leaves with snow caps
+    const t3Y = topY - 4;
+    for (let lx = -2; lx <= 2; lx++) {
+      for (let lz = -2; lz <= 2; lz++) {
+        const dist = Math.abs(lx) + Math.abs(lz);
+        if (dist > 3) continue;
+        if (lx === 0 && lz === 0) continue;
+        this.placeRawBlock(x + lx, t3Y, z + lz, BLOCK.PINE_LEAVES);
+        this.placeRawBlock(x + lx, t3Y + 1, z + lz, BLOCK.SNOW);
+      }
+    }
+
+    // 6. Tier 4 for tall trees: 5x5 rounded leaves
+    if (trunkHeight >= 7) {
+      const t4Y = topY - 5;
+      for (let lx = -2; lx <= 2; lx++) {
+        for (let lz = -2; lz <= 2; lz++) {
+          if (Math.abs(lx) === 2 && Math.abs(lz) === 2) continue;
+          if (lx === 0 && lz === 0) continue;
+          this.placeRawBlock(x + lx, t4Y, z + lz, BLOCK.PINE_LEAVES);
+        }
+      }
+    }
+  }
+
+  // Generates a massive 12-16 block tall Jungle Tree with wide canopy
+  generateJungleTree(x, y, z, randFunc) {
+    const height = 12 + Math.floor(randFunc() * 5); // 12 to 16 logs high
+    
+    // Trunk
+    for (let h = 0; h < height; h++) {
+      this.placeRawBlock(x, y + h, z, BLOCK.JUNGLE_WOOD);
+    }
+
+    // Massive Canopy at top
+    const topY = y + height - 1;
+    for (let ly = topY - 2; ly <= topY + 2; ly++) {
+      const radius = (ly === topY + 2) ? 1 : ((ly === topY + 1) ? 3 : 4);
+      for (let lx = -radius; lx <= radius; lx++) {
+        for (let lz = -radius; lz <= radius; lz++) {
+          if (Math.abs(lx) + Math.abs(lz) > radius + 1) continue;
+          if (lx === 0 && lz === 0 && ly < y + height) continue;
+          this.placeRawBlock(x + lx, ly, z + lz, BLOCK.JUNGLE_LEAVES);
+        }
+      }
+    }
+  }
+
+  // Generates an Ice Spike structure in frozen tundra
+  generateIceSpike(x, y, z, randFunc) {
+    const height = 5 + Math.floor(randFunc() * 5); // 5 to 9 blocks high
+    for (let h = 0; h < height; h++) {
+      const radius = Math.max(0, 2 - Math.floor(h / 3));
+      for (let lx = -radius; lx <= radius; lx++) {
+        for (let lz = -radius; lz <= radius; lz++) {
+          if (Math.abs(lx) + Math.abs(lz) > radius + 1) continue;
+          this.placeRawBlock(x + lx, y + h, z + lz, BLOCK.ICE);
+        }
+      }
+    }
+  }
+
   // Generates a Desert Cactus (cacti stack)
   generateCactus(x, y, z, randFunc) {
     const height = 2 + Math.floor(randFunc() * 2); // 2 to 3 blocks high
@@ -217,38 +341,40 @@ export class Structures {
       }
     }
 
-    // 3. Generate Houses (placed at offsets of 6)
-    // North houses: Door side is south
-    this.generateVillageHouse(centerX - 6, centerZ - 6, villageY, 'south');
-    this.generateVillageHouse(centerX + 6, centerZ - 6, villageY, 'south');
+    // 3. Generate Houses at their local terrain height
+    const h1Y = world.getTerrainHeight(centerX - 6, centerZ - 6);
+    this.generateVillageHouse(centerX - 6, centerZ - 6, h1Y, 'south');
 
-    // South houses: Door side is north
-    this.generateVillageHouse(centerX - 6, centerZ + 6, villageY, 'north');
-    this.generateVillageHouse(centerX + 6, centerZ + 6, villageY, 'north');
+    const h2Y = world.getTerrainHeight(centerX + 6, centerZ - 6);
+    this.generateVillageHouse(centerX + 6, centerZ - 6, h2Y, 'south');
+
+    const h3Y = world.getTerrainHeight(centerX - 6, centerZ + 6);
+    this.generateVillageHouse(centerX - 6, centerZ + 6, h3Y, 'north');
+
+    const h4Y = world.getTerrainHeight(centerX + 6, centerZ + 6);
+    this.generateVillageHouse(centerX + 6, centerZ + 6, h4Y, 'north');
 
     // Connect houses to main streets
-    // House 1 (NW): Z from centerZ - 3 to centerZ - 1
-    for (let z = -3; z <= -1; z++) this.generatePathBlock(centerX - 6, centerZ + z, villageY);
-    // House 4 (NE): Z from centerZ - 3 to centerZ - 1
-    for (let z = -3; z <= -1; z++) this.generatePathBlock(centerX + 6, centerZ + z, villageY);
-    // House 3 (SW): Z from centerZ + 1 to centerZ + 3
-    for (let z = 1; z <= 3; z++) this.generatePathBlock(centerX - 6, centerZ + z, villageY);
-    // House 2 (SE): Z from centerZ + 1 to centerZ + 3
-    for (let z = 1; z <= 3; z++) this.generatePathBlock(centerX + 6, centerZ + z, villageY);
+    for (let z = -3; z <= -1; z++) this.generatePathBlock(centerX - 6, centerZ + z, h1Y);
+    for (let z = -3; z <= -1; z++) this.generatePathBlock(centerX + 6, centerZ + z, h2Y);
+    for (let z = 1; z <= 3; z++) this.generatePathBlock(centerX - 6, centerZ + z, h3Y);
+    for (let z = 1; z <= 3; z++) this.generatePathBlock(centerX + 6, centerZ + z, h4Y);
 
-    // 4. Generate Crop Farms (North/South main street extensions)
-    this.generateVillageCropFarm(centerX, centerZ + 11, villageY);
-    this.generateVillageCropFarm(centerX, centerZ - 11, villageY);
+    // 4. Generate Crop Farms at local height
+    const f1Y = world.getTerrainHeight(centerX, centerZ + 11);
+    this.generateVillageCropFarm(centerX, centerZ + 11, f1Y);
 
-    // Extend paths to farms
-    this.generatePathBlock(centerX, centerZ + 10, villageY);
-    this.generatePathBlock(centerX, centerZ - 10, villageY);
+    const f2Y = world.getTerrainHeight(centerX, centerZ - 11);
+    this.generateVillageCropFarm(centerX, centerZ - 11, f2Y);
 
-    // 5. Generate Blacksmith (East main street extension)
-    this.generateVillageBlacksmith(centerX + 11, centerZ, villageY);
+    this.generatePathBlock(centerX, centerZ + 10, f1Y);
+    this.generatePathBlock(centerX, centerZ - 10, f2Y);
 
-    // Extend path to Blacksmith
-    this.generatePathBlock(centerX + 10, centerZ, villageY);
+    // 5. Generate Blacksmith at local height
+    const bmY = world.getTerrainHeight(centerX + 11, centerZ);
+    this.generateVillageBlacksmith(centerX + 11, centerZ, bmY);
+
+    this.generatePathBlock(centerX + 10, centerZ, bmY);
 
     // 6. Spawn extra villagers wandering near the well
     setTimeout(() => {
@@ -334,13 +460,13 @@ export class Structures {
         
         // Fill up or clear down to level ground
         for (let y = groundY - 5; y < groundY; y++) {
-          this.placeRawBlock(wx, y, wz, BLOCK.STONE);
+          this.placeRawBlock(wx, y, wz, BLOCK.STONE, true);
         }
-        this.placeRawBlock(wx, groundY, wz, BLOCK.COBBLESTONE); // Cobblestone floor base
+        this.placeRawBlock(wx, groundY, wz, BLOCK.COBBLESTONE, true); // Cobblestone floor base
 
-        // Clear airspace above house foundation (up to 8 blocks to fit pointed roof!)
-        for (let y = groundY + 1; y <= groundY + 8; y++) {
-          this.placeRawBlock(wx, y, wz, BLOCK.AIR);
+        // Clear airspace above house foundation up to 12 blocks to prevent hill terrain clipping
+        for (let y = groundY + 1; y <= groundY + 12; y++) {
+          this.placeRawBlock(wx, y, wz, BLOCK.AIR, true);
         }
       }
     }
